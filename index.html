@@ -101,13 +101,14 @@ input[type=range]:hover::-webkit-slider-thumb{background:var(--accent)}
     <div class="f"><span>base tempo</span><input id="bpm" type="range" min="62" max="92" step="1"><span class="val" id="bpmv"></span></div>
     <div class="f"><span>vinyl</span><input id="vinyl" type="range" min="0" max="1" step="0.01"><span class="val"></span></div>
     <div class="f"><span>cats</span><input id="purr" type="range" min="0" max="1" step="0.01"><span class="val"></span></div>
+    <div class="f"><span>groove</span><input id="beat" type="range" min="0" max="1" step="0.01" title="How much the room moves with the beat"><span class="val"></span></div>
     <div class="f"><span>sky</span><div class="seg" id="sky">
       <button data-v="auto">auto</button><button data-v="sunset">sunset</button><button data-v="dusk">dusk</button><button data-v="night">night</button>
     </div></div>
     <div class="f"><span>layers</span><div class="seg" id="layers">
       <button data-v="keys">keys</button><button data-v="bass">bass</button><button data-v="drums">drums</button><button data-v="melody">melody</button>
     </div></div>
-    <div class="keys">space play · n next · r rain · f fullscreen<br>click a cat to say hi · hold to pet</div>
+    <div class="keys">space play · n next · r rain · f fullscreen · l lamp · c candle<br>click a cat to say hi · hold to pet<br>the lamp, candle, mug, window and boombox answer a click</div>
   </div>
 </div>
 
@@ -118,6 +119,9 @@ input[type=range]:hover::-webkit-slider-thumb{background:var(--accent)}
    ===================================================================== */
 const ST = Object.assign({
   vol: 0.75, bpm: 74, vinyl: 0.5, purr: 0.6, rain: false, sky: 'auto',
+  // how much the room moves with the beat; starts at zero for people who ask for reduced motion
+  beat: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 0.7,
+  lamp: true, candle: true,
   layers: { keys: true, bass: true, drums: true, melody: true }
 }, (() => { try { return JSON.parse(localStorage.getItem('lofisy') || '{}'); } catch (e) { return {}; } })());
 function save() { try { localStorage.setItem('lofisy', JSON.stringify(ST)); } catch (e) {} }
@@ -420,12 +424,17 @@ function buildOutside() {
 }
 
 /* =====================================================================
-   Room layer (static)
+   Room layer (rebuilt when the lamp or candle is switched)
    ===================================================================== */
-const lampLight = (x, y) => { const dx = x - 44, dy = (y - 92) * 1.1, d2 = dx * dx + dy * dy; return 3.8 * Math.exp(-d2 / (2 * 50 * 50)) + 1.5 * Math.exp(-d2 / (2 * 13 * 13)); };
-const candleLight = (x, y) => { const dx = x - 214, dy = (y - 124) * 1.2; return 1.3 * Math.exp(-(dx * dx + dy * dy) / (2 * 18 * 18)); };
+// the two light sources at full strength: lamp on the wall, lamp on the desk top, candle
+const lampRaw = (x, y) => { const dx = x - 44, dy = (y - 92) * 1.1, d2 = dx * dx + dy * dy; return 3.8 * Math.exp(-d2 / (2 * 50 * 50)) + 1.5 * Math.exp(-d2 / (2 * 13 * 13)); };
+const deskRaw = (x, y) => { const dx = x - 44, dy = (y - 134) * 2.2; return 3.6 * Math.exp(-(dx * dx + dy * dy) / (2 * 58 * 58)); };
+const candleRaw = (x, y) => { const dx = x - 214, dy = (y - 124) * 1.2; return 1.3 * Math.exp(-(dx * dx + dy * dy) / (2 * 18 * 18)); };
+// what the room is built with: each source counts only while it is switched on
+const lampLight = (x, y) => ST.lamp ? lampRaw(x, y) : 0;
+const candleLight = (x, y) => ST.candle ? candleRaw(x, y) : 0;
 const light = (x, y) => lampLight(x, y) + candleLight(x, y);
-const deskLight = (x, y) => { const dx = x - 44, dy = (y - 134) * 2.2; return 3.6 * Math.exp(-(dx * dx + dy * dy) / (2 * 58 * 58)) + candleLight(x, y); };
+const deskLight = (x, y) => (ST.lamp ? deskRaw(x, y) : 0) + candleLight(x, y);
 const vign = (x, y) => { const dx = (x - 160) / 160, dy = (y - 90) / 90; return Math.max(0, dx * dx + dy * dy - 0.35) * 1.2; };
 const bulbs = [];
 
@@ -479,14 +488,14 @@ function buildRoom() {
   for (const fx of [69, 259]) for (let y = 5; y <= 10; y++) for (let x = fx - 2; x <= fx + 2; x++) if (Math.hypot(x - fx, y - 7.5) <= 2.3) b.set(x, y, dpick(brass, 2.2 + (x < fx ? 1.4 : 0) + (y < 7 ? 0.8 : 0), x, y));
   for (let x = 80; x <= 250; x += 5) if (x < 104 || x > 224) { b.set(x, 9, brass[3]); b.set(x, 10, brass[1]); }
   // fairy lights wire
-  const hooks = [70, 116, 164, 212, 258], wireC = pack(hex('#2a1e2c'));
-  bulbs.length = 0;
+  // the bulbs are placed on the first build only, so a rebuild leaves their shimmer alone
+  const hooks = [70, 116, 164, 212, 258], wireC = pack(hex('#2a1e2c')), first = !bulbs.length;
   for (let h = 0; h < hooks.length - 1; h++) {
     const a = hooks[h], e = hooks[h + 1], mid = (a + e) / 2, half = (e - a) / 2;
     for (let x = a; x <= e; x++) {
       const y = Math.round(2 + 4 * (1 - Math.pow((x - mid) / half, 2)));
       b.set(x, y, wireC);
-      if ((x - a) % 7 === 3) bulbs.push({ x, y: y + 1, p: Math.random() * 7, c: ['#ffcf6b', '#ff9a66', '#ffe3a8', '#a8dcb0', '#f7a8bd'][bulbs.length % 5] });
+      if (first && (x - a) % 7 === 3) bulbs.push({ x, y: y + 1, p: Math.random() * 7, s: 0, c: ['#ffcf6b', '#ff9a66', '#ffe3a8', '#a8dcb0', '#f7a8bd'][bulbs.length % 5] });
     }
   }
   // desk
@@ -505,17 +514,38 @@ function buildRoom() {
     }
   }
   b.flush();
-  const c = b.cx;
-  c.drawImage(sprPicture(), 16, 32);
-  c.drawImage(sprShelf(), 256, 46);
-  c.drawImage(sprPlant(), 2, 89);
-  c.drawImage(sprLamp(), 29, 80);
-  c.drawImage(sprBooks(), 60, 124);
-  c.drawImage(sprNotebook(), 106, 134);
-  c.drawImage(sprMug(), 90, 134);
-  c.drawImage(sprCandle(), 210, 118);
-  c.drawImage(sprBoombox(), 240, 106);
+  // sprites carry their own shading, so with the lamp off each gets a wash of shadow, deepest where the lamp used to reach
+  const put = (spr, x, y, lit) => {
+    if (!ST.lamp && !lit) {
+      const t = spr.getContext('2d');
+      t.globalCompositeOperation = 'source-atop'; t.fillStyle = '#0e0916';
+      t.globalAlpha = 0.2 + 0.3 * Math.min(1, lampRaw(x + spr.width / 2, y + spr.height / 2) / 3);
+      t.fillRect(0, 0, spr.width, spr.height);
+    }
+    b.cx.drawImage(spr, x, y);
+  };
+  put(sprPicture(), 16, 32);
+  put(sprShelf(), 256, 46);
+  put(sprPlant(), 2, 89);
+  put(sprLamp(ST.lamp), 29, 80, true);
+  put(sprBooks(), 60, 124);
+  put(sprNotebook(), 106, 134);
+  put(sprMug(), 90, 134);
+  put(sprCandle(), 210, 118, ST.candle);
+  put(sprBoombox(), 240, 106);
   return b.cv;
+}
+// lamp light as an additive layer for the beat swell: dithered alpha steps keep the pixel grain,
+// and the room's own alpha masks it so the window glass stays dark
+function buildGlow() {
+  const b = new Buf(W, H), room = roomCv.getContext('2d').getImageData(0, 0, W, H).data, warm = hex('#ffc070');
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!room[(y * W + x) * 4 + 3]) continue;
+    const v = (y >= 124 && y <= 158 ? deskRaw(x, y) : lampRaw(x, y)) / 5.3 * 4, i = Math.floor(v);
+    const lv = Math.min(4, v - i > BAYER[(y & 3) * 4 + (x & 3)] ? i + 1 : i);
+    if (lv > 0) b.set(x, y, pack(warm, lv * 48));
+  }
+  return b.flush();
 }
 
 /* ---------- portrait extensions: wall above, floor below ---------- */
@@ -641,13 +671,13 @@ function sprPlant() {
   s.rect(8, 36, 20, 3, 0, 3.1);
   return s.render([RP.terra, RP.green, RP.stem], { light: 1 });
 }
-function sprLamp() {
+function sprLamp(on) {
   const s = new Shape(30, 57);
-  s.line(15, 19, 15, 52, 1, 2.6, 2);
-  s.ell(15, 53, 8, 2.5, 1, 2.8);
-  s.poly([[9, 2], [21, 2], [27.5, 19], [2.5, 19]], 0, (x, y) => 2.2 + (y - 2) / 16 * 1.6);
-  s.rect(3, 18, 24, 1, 0, 4.4);
-  for (let x = 10; x <= 20; x++) s.dot(x, 19, x > 12 && x < 18 ? '#fff6d0' : '#ffe39a');
+  s.line(15, 19, 15, 52, 1, on ? 2.6 : 0.8, 2);
+  s.ell(15, 53, 8, 2.5, 1, on ? 2.8 : 1);
+  s.poly([[9, 2], [21, 2], [27.5, 19], [2.5, 19]], 0, on ? (x, y) => 2.2 + (y - 2) / 16 * 1.6 : 0.9);
+  s.rect(3, 18, 24, 1, 0, on ? 4.4 : 1.4);
+  if (on) for (let x = 10; x <= 20; x++) s.dot(x, 19, x > 12 && x < 18 ? '#fff6d0' : '#ffe39a');
   return s.render([RP.shade, RP.brass], { light: 0, rim: 0.6 });
 }
 function sprBooks() {
@@ -697,54 +727,67 @@ function sprBoombox() {
 
 /* ---------- cats ---------- */
 function curls(x, y) { return ((x * 2 + y * 3) % 7 === 0 ? -0.8 : 0) + ((x * 5 + y) % 9 === 0 ? 0.45 : 0); }
-function devonBody() {
-  const s = new Shape(28, 25), B = 4;
-  s.ell(14, 13, 8, 8, 0, B); s.ell(14, 18, 10, 5, 0, B);
-  s.ell(14, 11, 4.2, 5, 0, B + 1);
+// eyes are 3x2 pixels: a pupil colour, then [left, right] iris colours for the top and bottom row
+const EYES = {
+  devon: { pupil: '#151a26', iris: [['#e6eef4', '#9fb8cc'], ['#6f8aa6', '#6f8aa6']] },
+  sph: { pupil: '#120d0e', iris: [['#c4d468', '#a6bc52'], ['#e8c44c', '#d0a83a']] }
+};
+// one eye as [col, row, colour]. The pupil column follows lx (-1..1); looking up or down (ly) keeps the pupil in one row only.
+function eyePx(E, lx, ly) {
+  const out = [];
+  for (let r = 0; r < 2; r++) {
+    const pc = ly === 0 || (ly < 0) === (r === 0) ? 1 + lx : -1;
+    let k = 0;
+    for (let i = 0; i < 3; i++) out.push([i, r, i === pc ? E.pupil : E.iris[r][k++ ? 1 : 0]]);
+  }
+  return out;
+}
+// `inhale` lifts the chest one row; legs, paws and haunches stay put, and the curls ride up with the chest
+function devonBody(inhale) {
+  const s = new Shape(28, 25), B = 4, up = inhale ? 1 : 0;
+  s.ell(14, 13 - up, 8, 8, 0, B); s.ell(14, 18, 10, 5, 0, B);
+  s.ell(14, 11 - up, 4.2, 5, 0, B + 1);
   s.rect(10, 12, 3, 10, 0, B + 0.25); s.rect(15, 12, 3, 10, 0, B + 0.25);
   for (let y = 15; y < 22; y++) { s.adj(13, y, -1.3); s.adj(14, y, -0.6); }
   s.rect(9, 21, 4, 2, 0, B + 0.8); s.rect(15, 21, 4, 2, 0, B + 0.8);
-  s.texture(curls);
+  s.texture((x, y) => curls(x, y < 13 ? y + up : y));
   return s.render([RP.devon]);
 }
-function devonHead(eyes, mouth) {
+function devonHead(eyes, mouth, lx = 0, ly = 0) {
   const s = new Shape(28, 22), B = 4;
   s.poly([[5, 14], [11, 8], [1.5, 1]], 0, B - 0.2); s.poly([[23, 14], [17, 8], [26.5, 1]], 0, B - 0.2);
   s.ell(14, 14, 7.5, 6, 0, B); s.ell(14, 16, 8.2, 4, 0, B);
   s.ell(14, 17.5, 3.4, 2.2, 0, B + 1);
   s.poly([[5.5, 12], [9.5, 8.5], [3, 3.5]], 1, 2.4); s.poly([[22.5, 12], [18.5, 8.5], [25, 3.5]], 1, 2.4);
   s.texture((x, y, m) => m === 0 && y > 9 && y < 13 ? curls(x, y) * 0.5 : 0);
-  if (eyes === 'open') {
-    for (const ex of [9, 17]) {
-      s.dot(ex, 14, '#e6eef4'); s.dot(ex + 1, 14, '#151a26'); s.dot(ex + 2, 14, '#9fb8cc');
-      s.dot(ex, 15, '#6f8aa6'); s.dot(ex + 1, 15, '#151a26'); s.dot(ex + 2, 15, '#6f8aa6');
-    }
-  } else for (const ex of [9, 17]) for (let i = 0; i < 3; i++) s.dot(ex + i, 15, '#4a4256');
+  if (eyes === 'open') { for (const ex of [9, 17]) for (const [i, r, c] of eyePx(EYES.devon, lx, ly)) s.dot(ex + i, 14 + r, c); }
+  else for (const ex of [9, 17]) for (let i = 0; i < 3; i++) s.dot(ex + i, 15, '#4a4256');
   s.dot(14, 17, '#d9939a'); s.dot(14, 18, '#6d5f72');
   if (mouth) { s.dot(13, 19, '#4a2230'); s.dot(14, 19, '#4a2230'); s.dot(15, 19, '#4a2230'); s.dot(14, 20, '#c06a78'); }
   else { s.dot(13, 19, '#6d5f72'); s.dot(15, 19, '#6d5f72'); }
   return s.render([RP.devon, RP.pinkEar], { openBelow: 18 });
 }
-function sphynxBody() {
-  // side-sitting, upright on long front legs; paws on y=29
-  const s = new Shape(36, 32), B = 3, G = 29, cy = 8, cr = 4.5, hr = 7, ty = 5;
+function sphynxBody(inhale) {
+  // side-sitting, upright on long front legs; paws on y=29. `inhale` lifts the chest one row.
+  const s = new Shape(36, 32), B = 3, G = 29, cy = 8, cr = 4.5, hr = 7, ty = 5, up = inhale ? 1 : 0;
   const hy = G - hr + 1;
   s.ell(23, hy, hr, hr, 0, B);
   s.ell(17, (cy + hy) / 2, Math.hypot(12, hy - cy) / 2 + 2, ty, 0, B, Math.atan2(hy - cy, 12));
-  s.ell(11, cy, cr, 7, 0, B);
+  s.ell(11, cy - up, cr, 7, 0, B);
   s.rect(13, cy + 4, 3, G - 1 - (cy + 4), 0, B - 1);
   s.rect(8, cy + 3, 3, G - 1 - (cy + 3), 0, B);
   s.rect(7, G - 1, 4, 2, 0, B + 1); s.rect(12, G - 1, 4, 2, 0, B);
   s.ell(26, G - 1, 4.5, 1.6, 0, B + 1);
-  for (let x = 8; x <= 14; x++) s.adj(x, cy - 6, -0.9);
-  for (let x = 9; x <= 13; x++) s.adj(x, cy - 4, -0.7);
+  for (let x = 8; x <= 14; x++) s.adj(x, cy - 6 - up, -0.9);
+  for (let x = 9; x <= 13; x++) s.adj(x, cy - 4 - up, -0.7);
   return s.render([RP.sphynx]);
 }
-function sphynxHead(eyes, mouth) {
-  const s = new Shape(28, 24), B = 4;
-  s.poly([[5, 15], [11, 9], [1.5, 2]], 0, B - 1); s.poly([[23, 15], [17, 9], [26.5, 2]], 0, B - 1);
+// `flick` ('L' or 'R') folds that ear tip back by two pixels; lx, ly point the pupils
+function sphynxHead(eyes, mouth, flick, lx = 0, ly = 0) {
+  const s = new Shape(28, 24), B = 4, fl = flick === 'L', fr = flick === 'R';
+  s.poly([[5, 15], [11, 9], fl ? [3.5, 4.5] : [1.5, 2]], 0, B - 1); s.poly([[23, 15], [17, 9], fr ? [24.5, 4.5] : [26.5, 2]], 0, B - 1);
   s.ell(14, 15, 7, 6, 0, B); s.ell(14, 17, 7.6, 4.2, 0, B);
-  s.poly([[5.5, 13], [9.5, 9.5], [3, 4.5]], 1, 2); s.poly([[22.5, 13], [18.5, 9.5], [25, 4.5]], 1, 2);
+  s.poly([[5.5, 13], [9.5, 9.5], fl ? [4.5, 6.5] : [3, 4.5]], 1, 2); s.poly([[22.5, 13], [18.5, 9.5], fr ? [23.5, 6.5] : [25, 4.5]], 1, 2);
   s.ell(14, 18.5, 3.2, 2.3, 0, B - 2); // whisker pads: darker than skin, lighter than the mask
   // dark mask on the nose bridge only: between the eyes, down to the nose
   for (let y = 12; y <= 17; y++) {
@@ -757,12 +800,11 @@ function sphynxHead(eyes, mouth) {
   for (const x of [9, 10, 11, 17, 18, 19]) s.adj(x, 14, -1);
   s.adj(8, 16, -0.8); s.adj(20, 16, -0.8); s.adj(8, 18, -0.8); s.adj(20, 18, -0.8);
   for (const ex of [9, 17]) {
-    if (eyes === 'open') {
-      s.dot(ex, 15, '#c4d468'); s.dot(ex + 1, 15, '#120d0e'); s.dot(ex + 2, 15, '#a6bc52');
-      s.dot(ex, 16, '#e8c44c'); s.dot(ex + 1, 16, '#120d0e'); s.dot(ex + 2, 16, '#d0a83a');
-    } else if (eyes === 'half') {
+    if (eyes === 'open') { for (const [i, r, c] of eyePx(EYES.sph, lx, ly)) s.dot(ex + i, 15 + r, c); }
+    else if (eyes === 'half') {
+      // sleepy: the lid covers the top row, the pupil can still slide sideways under it
       for (let i = 0; i < 3; i++) s.dot(ex + i, 15, '#3a2f33');
-      s.dot(ex, 16, '#e8c44c'); s.dot(ex + 1, 16, '#120d0e'); s.dot(ex + 2, 16, '#d0a83a');
+      for (const [i, r, c] of eyePx(EYES.sph, lx, 0)) if (r === 1) s.dot(ex + i, 16, c);
     } else for (let i = 0; i < 3; i++) s.dot(ex + i, 16, '#2a2124');
   }
   s.dot(14, 18, '#1e1518'); s.dot(14, 19, '#2a1f22');
@@ -777,7 +819,20 @@ function sphynxHead(eyes, mouth) {
 let AC = null, playing = false, FX = {};
 let comp, master, analyser, lofiIn, mlp, duck, verbIn, dlyIn, dly, keysIn, bassIn, drumIn, melIn, snVerb, vinylG, rainG, noiseBuf;
 const busG = {};
+/* ---------- beat sync ----------
+   Voices push { t, k, v } into `vq` when they are scheduled; update() releases each event at the moment
+   it is heard and folds it into BEAT. Anything drawn reads BEAT, so the art can change without touching audio. */
 const vq = [];
+const BEAT = {
+  kick: 0, snare: 0, chord: 0,   // decaying hit levels, 0..1
+  glow: 0,                       // smoothed kick + chord, drives the lamp
+  barT: 0, barDur: 0, bars: 0,   // current bar: start time, length, running count
+  pos: 0,                        // position in bars, continuous
+  rate: 1, stop: null,           // tape speed, 1 -> 0 during a tape stop
+  spec: new Float32Array(6)      // spectrum bands, low to high, 0..1
+};
+const BEAT_LAYER = { kick: 'drums', snare: 'drums', hat: 'drums', chord: 'keys' };
+const SPEC_EDGE = [0, 2, 4, 8, 16, 32, 80], specPk = new Float32Array(6);   // analyser bins per band, recent peak per band
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 const O = (type, f) => { const o = AC.createOscillator(); o.type = type; o.frequency.value = f; return o; };
 const G = v => { const g = AC.createGain(); g.gain.value = v; return g; };
@@ -795,8 +850,10 @@ function initAudio() {
   master = G(ST.vol);
   comp = AC.createDynamicsCompressor();
   comp.threshold.value = -16; comp.ratio.value = 3; comp.knee.value = 12; comp.attack.value = 0.006; comp.release.value = 0.2;
-  analyser = AC.createAnalyser(); analyser.fftSize = 512;
-  comp.connect(master); master.connect(analyser); analyser.connect(AC.destination);
+  // the meter listens to the music bus before the volume knob, so it ignores rain, vinyl and the cats
+  analyser = AC.createAnalyser(); analyser.fftSize = 512; analyser.smoothingTimeConstant = 0.5;
+  analyser.minDecibels = -80; analyser.maxDecibels = -10;
+  comp.connect(master); master.connect(AC.destination); comp.connect(analyser);
 
   // lofi bus: tape wow/flutter -> saturation -> lowpass
   lofiIn = G(1);
@@ -1017,6 +1074,13 @@ function catVoice(t, v, pan) {
   src.onended = () => p.disconnect();
   return d;
 }
+// small prop sounds, a switch tick or a puff of breath: band-passed noise with a short tail, past the music bus
+function sfx(freq, tail, vel) {
+  if (!AC || !playing) return;
+  const t = AC.currentTime + 0.01, n = noiseAt(), bp = BQ('bandpass', freq, 1.2), a = G(0);
+  a.gain.setValueAtTime(vel, t); a.gain.setTargetAtTime(0, t, tail);
+  n.connect(bp); bp.connect(a); a.connect(master); n.start(t, Math.random()); n.stop(t + tail * 8 + 0.05);
+}
 function catSay(id, kind) {
   if (!AC || !playing) return;
   const c = cats[id];
@@ -1236,7 +1300,7 @@ function kick(t, vel, dk) {
   ng.gain.setValueAtTime(K.click * vel, t); ng.gain.setTargetAtTime(0, t, 0.006);
   n.connect(nl); nl.connect(ng); ng.connect(drumIn); n.start(t, Math.random()); n.stop(t + 0.08);
   duck.gain.setTargetAtTime(0.5, t, 0.005); duck.gain.setTargetAtTime(1, t + 0.07, 0.11);
-  vq.push({ t, k: 'kick' });
+  vq.push({ t, k: 'kick', v: vel });
 }
 // backbeat voice: soft snare, rimshot, clap or brush
 function back(t, vel, dk) {
@@ -1270,7 +1334,7 @@ function back(t, vel, dk) {
   }
   a.connect(drumIn); a.connect(snVerb);
   n.start(t, Math.random() * 1.5); n.stop(t + 0.5);
-  vq.push({ t, k: 'snare' });
+  vq.push({ t, k: 'snare', v: vel });
 }
 function hat(t, vel, open, dk) {
   const n = noiseAt(), p = AC.createStereoPanner(), a = G(0);
@@ -1290,6 +1354,7 @@ function hat(t, vel, open, dk) {
   }
   a.connect(p); p.connect(drumIn);
   n.start(t, Math.random() * 1.5); n.stop(t + (open ? 0.6 : 0.2));
+  vq.push({ t, k: 'hat', v: vel });
 }
 function shaker(t, vel) {
   const n = noiseAt(), hp = BQ('highpass', 5000), bp = BQ('bandpass', 8000, 0.8), p = AC.createStereoPanner(), a = G(0);
@@ -1702,6 +1767,7 @@ function pickLead(harm) {
 function pickHarm() { let r = Math.random(); for (const k in HARM) { r -= HARM[k].w; if (r <= 0) return k; } return 'rhodes'; }
 function playChord(t, notes, lh, dur, vel, comp = 'block') {
   const H = HARM[song.harm], fn = H.fn, v = vel * H.g * COMP_GAIN[comp];
+  vq.push({ t, k: 'chord', v: vel });
   const step = 60 / songBpm(song) / 2, n = Math.max(1, Math.round(dur / step)), up = notes.slice().sort((a, b) => a - b);
   if (comp === 'arp') {
     for (let k = 0; k < n; k++) {
@@ -1746,6 +1812,7 @@ function scheduleBar(t0) {
   const bar = song.bars[barIdx], next = song.bars[barIdx + 1], sd = 60 / songBpm(song) / 4, barDur = sd * 16;
   const T = s => t0 + s * sd + (s % 2 ? (song.swing - 0.5) * 2 * sd : 0);
   const hum = a => (Math.random() - 0.5) * a;
+  vq.push({ t: t0, k: 'bar', dur: barDur });
 
   mlp.frequency.setValueAtTime(bar.f[0], t0);
   mlp.frequency.linearRampToValueAtTime(bar.f[1], t0 + barDur);
@@ -1823,7 +1890,11 @@ function scheduleBar(t0) {
   }
   // optional tape stop over the end of the last bar, then a short silence before the next track
   let gap = 0;
-  if (song.tapeStopEnd && barIdx === song.bars.length - 1) { gap = 0.7; tapeStop(t0 + barDur, Math.min(1.4, barDur * 0.45), t0 + barDur + gap); }
+  if (song.tapeStopEnd && barIdx === song.bars.length - 1) {
+    gap = 0.7; const len = Math.min(1.4, barDur * 0.45);
+    tapeStop(t0 + barDur, len, t0 + barDur + gap);
+    vq.push({ t: t0 + barDur - len, k: 'stop', len, resume: t0 + barDur + gap });
+  }
   barIdx++;
   return gap;
 }
@@ -1834,6 +1905,8 @@ function tick() {
     const gap = scheduleBar(nextBarT) || 0;
     nextBarT += 60 / songBpm(song) * 4 + gap;
   }
+  // nothing drains the queue while the tab is hidden
+  if (vq.length > 400) vq.splice(0, vq.length - 400);
 }
 let ticker = null;
 function startTicker() {
@@ -1864,6 +1937,7 @@ function syncUI() {
   $('vol').value = ST.vol; $('bpm').value = ST.bpm; $('bpmv').textContent = ST.bpm; $('vinyl').value = ST.vinyl;
   $('vinyl').nextElementSibling.textContent = Math.round(ST.vinyl * 100);
   $('purr').value = ST.purr; $('purr').nextElementSibling.textContent = Math.round(ST.purr * 100);
+  $('beat').value = ST.beat; $('beat').nextElementSibling.textContent = Math.round(ST.beat * 100);
   for (const b of $('sky').children) b.setAttribute('aria-pressed', b.dataset.v === ST.sky);
   for (const b of $('layers').children) b.setAttribute('aria-pressed', !!ST.layers[b.dataset.v]);
 }
@@ -1880,6 +1954,27 @@ function setRain(on) {
   syncUI();
 }
 function nextTrack() { if (!AC) { togglePlay(); return; } skipFlag = true; }
+function setVol(v) { ST.vol = v; if (AC) master.gain.setTargetAtTime(v, AC.currentTime, 0.05); save(); }
+// lamp or candle switched: rebuild everything their light touches and fade the room over in `fade` seconds
+function relight(fade) {
+  save(); roomPrev = roomCv; roomCv = buildRoom(); roomFade = 0; roomFadeT = fade;
+  if (ext) ext.top = buildExtTop(ext.T);
+}
+function setLamp(on) { ST.lamp = on; relight(on ? 0.08 : 0.3); sfx(2600, 0.005, 0.3); }
+function setCandle(on) {
+  ST.candle = on; relight(0.15);
+  if (on) flare = 1;
+  // smoke: each puff rises at its own speed, so the wisp stretches as it climbs
+  else { sfx(650, 0.05, 0.14); for (let i = 0; i < 10; i++) steam.push({ x: 214, y: 119, v: 3 + i * 0.7, a: Math.random() * 0.6, p: Math.random() * 6, c: '#a8a2b0' }); }
+}
+// what a click on each prop does
+const ACT = {
+  lamp: () => setLamp(!ST.lamp),
+  candle: () => setCandle(!ST.candle),
+  window: () => setRain(!ST.rain),
+  deck: () => { if (playing) { nextTrack(); ffwd = 1; } else togglePlay(); },
+  mug: () => { for (let i = 0; i < 9; i++) steam.push({ x: 94 + Math.random() * 6, y: 135 - Math.random() * 3, a: Math.random() * 0.6, p: Math.random() * 6 }); }
+};
 function fullscreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {}); else document.exitFullscreen?.(); }
 
 $('bigplay').onclick = togglePlay;
@@ -1888,9 +1983,10 @@ $('next').onclick = nextTrack;
 $('rain').onclick = () => setRain(!ST.rain);
 $('fs').onclick = fullscreen;
 $('gear').onclick = () => { const p = $('panel'); p.hidden = !p.hidden; $('gear').setAttribute('aria-expanded', !p.hidden); };
-$('vol').oninput = e => { ST.vol = +e.target.value; if (AC) master.gain.setTargetAtTime(ST.vol, AC.currentTime, 0.05); save(); };
+$('vol').oninput = e => setVol(+e.target.value);
 $('bpm').oninput = e => { ST.bpm = +e.target.value; $('bpmv').textContent = ST.bpm; if (AC) dly.delayTime.setTargetAtTime(60 / songBpm(song) * 0.75, AC.currentTime, 0.2); if (song) announce(song); save(); };
 $('purr').oninput = e => { ST.purr = +e.target.value; e.target.nextElementSibling.textContent = Math.round(ST.purr * 100); if (purrBus) purrBus.gain.setTargetAtTime(ST.purr, AC.currentTime, 0.05); save(); };
+$('beat').oninput = e => { ST.beat = +e.target.value; e.target.nextElementSibling.textContent = Math.round(ST.beat * 100); save(); };
 $('vinyl').oninput = e => { ST.vinyl = +e.target.value; e.target.nextElementSibling.textContent = Math.round(ST.vinyl * 100); if (AC) vinylG.gain.setTargetAtTime(ST.vinyl * 0.7, AC.currentTime, 0.05); save(); };
 $('sky').onclick = e => { const v = e.target.dataset.v; if (!v) return; ST.sky = v; save(); buildOutside(); syncUI(); };
 $('layers').onclick = e => {
@@ -1905,6 +2001,8 @@ addEventListener('keydown', e => {
   else if (e.code === 'KeyN') nextTrack();
   else if (e.code === 'KeyR') setRain(!ST.rain);
   else if (e.code === 'KeyF') fullscreen();
+  else if (e.code === 'KeyL') setLamp(!ST.lamp);
+  else if (e.code === 'KeyC') setCandle(!ST.candle);
   else if (e.code === 'Escape') { $('panel').hidden = true; $('gear').setAttribute('aria-expanded', false); }
   poke();
 });
@@ -1938,41 +2036,74 @@ function resize() {
   sc.imageSmoothingEnabled = false;
 }
 addEventListener('resize', resize);
-// which cat (if any) is under a screen point
-function catAt(cx, cy) {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2), x = (cx * dpr - view.ox) / view.s, y = (cy * dpr - view.oy) / view.s;
-  const D = cats.devon, S = cats.sph;
+// screen point -> scene pixel
+function toScene(cx, cy) { const dpr = Math.min(window.devicePixelRatio || 1, 2); return [(cx * dpr - view.ox) / view.s, (cy * dpr - view.oy) / view.s]; }
+// props that answer a click: id, then x, y, w, h in scene pixels
+const SPOTS = [['mug', 90, 128, 15, 20], ['candle', 208, 108, 13, 26], ['deck', 240, 106, 58, 31], ['lamp', 29, 80, 30, 57], ['window', 104, 20, 121, 87]];
+// what is under a screen point: a cat first (they sit in front of the window), then a prop, else null
+function hitAt(cx, cy) {
+  const [x, y] = toScene(cx, cy), D = cats.devon, S = cats.sph;
   if (x >= S.cx - 21 && x <= S.cx + 20 && y >= S.by - 50 && y <= S.by) return 'sph';
   if (x >= D.cx - 14 && x <= D.cx + 14 && y >= D.by - 36 && y <= D.by + 1) return 'devon';
+  for (const [id, sx, sy, w, h] of SPOTS) if (x >= sx && x < sx + w && y >= sy && y < sy + h) return id;
   return null;
 }
-screen.addEventListener('pointermove', e => { screen.style.cursor = catAt(e.clientX, e.clientY) ? 'pointer' : ''; });
-// click a cat: it meows or trills; hold: it closes its eyes and purrs
+screen.addEventListener('pointermove', e => { screen.style.cursor = hitAt(e.clientX, e.clientY) ? 'pointer' : ''; });
+// scrolling over the boombox turns the volume
+screen.addEventListener('wheel', e => {
+  if (hitAt(e.clientX, e.clientY) !== 'deck') return;
+  e.preventDefault(); setVol(clamp(ST.vol - Math.sign(e.deltaY) * 0.04, 0, 1)); $('vol').value = ST.vol; poke();
+}, { passive: false });
+// the cats watch the pointer: where it was last seen (scene pixels) and when. A tap counts on touch screens.
+const ptr = { x: 0, y: 0, t: -99 };
+const seen = e => { [ptr.x, ptr.y] = toScene(e.clientX, e.clientY); ptr.t = time; };
+addEventListener('pointermove', seen); addEventListener('pointerdown', seen);
+document.documentElement.addEventListener('pointerleave', () => { ptr.t = -99; });
+// click a cat: it meows or trills; hold: it closes its eyes and purrs. A prop acts when press and release land on it.
 let press = null;
 screen.addEventListener('pointerdown', e => {
-  const id = catAt(e.clientX, e.clientY);
+  const id = hitAt(e.clientX, e.clientY);
   if (!id) return;
-  press = { id, timer: setTimeout(() => { cats[id].doze = 6 + Math.random() * 3; press = null; }, 550) };
+  press = { id, timer: cats[id] ? setTimeout(() => { cats[id].doze = 6 + Math.random() * 3; press = null; }, 550) : 0 };
 });
-const release = talk => () => {
+const release = talk => e => {
   if (!press) return;
   clearTimeout(press.timer);
-  if (talk && !(cats[press.id].mouth > 0)) catSay(press.id, Math.random() < 0.6 ? 'meow' : 'mrr');
-  press = null;
+  const id = press.id; press = null;
+  if (!talk) return;
+  if (cats[id]) { if (!(cats[id].mouth > 0)) catSay(id, Math.random() < 0.6 ? 'meow' : 'mrr'); }
+  else if (hitAt(e.clientX, e.clientY) === id) ACT[id]();
 };
 screen.addEventListener('pointerup', release(true));
 screen.addEventListener('pointerleave', release(false));
 screen.addEventListener('pointercancel', release(false));
 
-let roomCv = null;
-const CAT = { devonBody: null, devonOpen: null, devonClosed: null, sphBody: null, sphOpen: null, sphHalf: null, sphClosed: null };
+let roomCv = null, glowCv = null;
+let roomPrev = null, roomFade = 1, roomFadeT = 0.2;   // the room before the last light switch, and how far the fade to the new one has come
+// bodies are [rest, inhale]; heads are built on first use and kept, keyed by cat | eyes | mouth | ear flick | look
+const CAT = { devonBody: null, sphBody: null, heads: {} };
+function catHead(cat, eyes, mouth, flick, lx, ly) {
+  const key = [cat, eyes, mouth ? 1 : 0, flick, lx, ly].join('|');
+  return CAT.heads[key] || (CAT.heads[key] = cat === 'devon' ? devonHead(eyes, mouth, lx, ly) : sphynxHead(eyes, mouth, flick, lx, ly));
+}
+// per cat: bph/bper/br = breath phase, period (s) and level 0..1; lx, ly = where the pupils point; lw, lag = gaze reaction timer
 const cats = {
-  devon: { cx: 126, by: 110, blink: 0, nextBlink: 2, nod: 0, doze: 0, mouth: 0 },
-  sph: { cx: 172, by: 148, blink: 0, nextBlink: 3, sleepy: 0, nextSleepy: 14, twitch: 0, nextTwitch: 5, doze: 0, purrSleepy: false, mouth: 0 },
+  devon: { cx: 126, by: 110, blink: 0, nextBlink: 2, nod: 0, doze: 0, mouth: 0, bph: 0, bper: 3.1, br: 0, lx: 0, ly: 0, lw: 0, lag: 0.2 },
+  sph: { cx: 172, by: 148, blink: 0, nextBlink: 3, sleepy: 0, nextSleepy: 14, twitch: 0, nextTwitch: 5, doze: 0, purrSleepy: false, mouth: 0, groove: false, tap: 0, ear: 0, earSide: 'R', bph: 0.4, bper: 3.7, br: 0, lx: 0, ly: 0, lw: 0, lag: 0.3 },
   nextTalk: 120 + Math.random() * 180
 };
-let rainDrops = [], glassDrops = [], ripples = [], steam = [], motes = [], shoot = null, nextShoot = 20;
-let reelA = 0, vu = 0, time = 0, steamT = 0;
+const BREATH = 0.5;   // how far a full breath lifts a head, in scene pixels
+// a cat's gaze: toward the pointer while it has moved in the last few seconds, else straight ahead, after a short reaction time
+function look(c, ex, ey, dt) {
+  const dx = ptr.x - ex, dy = ptr.y - ey, d = Math.hypot(dx, dy);
+  let lx = 0, ly = 0;
+  if (time - ptr.t < 4 && !(c.doze > 0) && (Math.abs(dx) > 12 || Math.abs(dy) > 8)) { lx = Math.abs(dx) > 0.38 * d ? Math.sign(dx) : 0; ly = Math.abs(dy) > 0.6 * d ? Math.sign(dy) : 0; }
+  if (lx === c.lx && ly === c.ly) c.lw = 0;
+  else if ((c.lw += dt) > c.lag) { c.lx = lx; c.ly = ly; c.lw = 0; c.lag = 0.1 + Math.random() * 0.3; }
+}
+let rainDrops = [], glassDrops = [], ripples = [], steam = [], motes = [], waves = [], shoot = null, nextShoot = 20;
+let reelA = 0, swayPh = 0, time = 0, steamT = 0;
+let ffwd = 0, flare = 0;   // reel whirl after a skip, flame flare after relighting; both decay from 1
 function spawnRain() {
   rainDrops = []; glassDrops = [];
   if (!ST.rain) return;
@@ -1997,14 +2128,61 @@ function chain(x, y, a0, curl, n, len, wob, thick, light, dark) {
   pts.forEach(([x, y], i) => { const t = i > n - 4 ? thick - 1 : thick; g.fillRect(Math.round(x), Math.round(y), t, t); });
 }
 
+// one heard event -> state. `late` events (the tab was hidden) keep the clock right but move nothing.
+function beatEvent(e, late) {
+  if (e.k === 'bar') { BEAT.barT = e.t; BEAT.barDur = e.dur; BEAT.bars++; cats.sph.groove = Math.random() < 0.3 + 0.5 * ST.beat; return; }
+  if (e.k === 'stop') { BEAT.stop = e; return; }
+  if (late || !ST.beat || !ST.layers[BEAT_LAYER[e.k]]) return;
+  const D = cats.devon, S = cats.sph;
+  if (e.k === 'kick') {
+    BEAT.kick = Math.max(BEAT.kick, e.v);
+    if (D.nod === 0 && Math.random() < (e.v > 0.7 ? 0.4 : 0.12) * ST.beat) D.nod = 1;
+  } else if (e.k === 'snare') {
+    BEAT.snare = Math.max(BEAT.snare, e.v);
+    if (e.v < 0.5) return;
+    // the Sphynx keeps the backbeat for a few bars at a time (head dips, tail tip lifts), and now and then an ear answers
+    if (S.groove && !(S.doze > 0) && !(S.sleepy > 0)) S.tap = 1;
+    if (S.ear === 0 && Math.random() < 0.35 * ST.beat) { S.ear = 0.15; S.earSide = Math.random() < 0.5 ? 'L' : 'R'; }
+  } else if (e.k === 'hat') {
+    if (bulbs.length && Math.random() < 0.5 * ST.beat) bulbs[Math.floor(Math.random() * bulbs.length)].s = 1;
+  } else if (e.k === 'chord') {
+    BEAT.chord = 1;
+    if (waves.length < 4) waves.push({ a: 0 });
+  }
+}
+
 function update(dt) {
   time += dt;
   if (AC) {
-    while (vq.length && vq[0].t <= AC.currentTime) { const e = vq.shift(); if (e.k === 'kick' && cats.devon.nod === 0 && Math.random() < 0.25) cats.devon.nod = 1; }
-    if (vq.length > 400) vq.splice(0, vq.length - 400);
+    // an event is due once its sound has reached the speakers
+    const now = AC.currentTime - Math.min(0.2, AC.outputLatency || AC.baseLatency || 0);
+    let n = 0;
+    for (const e of vq) { if (e.t > now) vq[n++] = e; else beatEvent(e, now - e.t > 0.25); }
+    vq.length = n;
+    BEAT.pos = BEAT.barDur ? BEAT.bars + clamp((now - BEAT.barT) / BEAT.barDur, 0, 1) : 0;
+    const st = BEAT.stop;
+    BEAT.rate = !st || now < st.t ? 1 : now < st.t + st.len ? 1 - (now - st.t) / st.len : now < st.resume ? 0 : Math.min(1, (now - st.resume) / 0.4);
+    if (st && now > st.resume + 0.4) BEAT.stop = null;
   }
+  BEAT.kick *= Math.exp(-dt * 9); BEAT.snare *= Math.exp(-dt * 9); BEAT.chord *= Math.exp(-dt * 1.6);
+  // the lamp follows kick and chord with a soft attack and a slower release, a swell and not a flash
+  { const tgt = 0.5 * BEAT.kick + 0.5 * BEAT.chord; BEAT.glow += (tgt - BEAT.glow) * Math.min(1, dt * (tgt > BEAT.glow ? 30 : 5)); }
+  for (const b of bulbs) b.s = Math.max(0, b.s - dt * 6);
+  waves.forEach(w => w.a += dt * 1.1); waves = waves.filter(w => w.a < 1);
   const D = cats.devon, S = cats.sph;
+  S.tap = Math.max(0, S.tap - dt * 4); S.ear = Math.max(0, S.ear - dt);
+  // Devon's tail sways once per bar while the music plays, drifting into step instead of jumping
+  { const locked = playing && ST.beat > 0 && BEAT.barDur > 0;
+    swayPh += dt * (locked ? 2 * Math.PI / BEAT.barDur : 1.5);
+    if (locked) { let err = (2 * Math.PI * BEAT.pos - swayPh) % (2 * Math.PI); if (err > Math.PI) err -= 2 * Math.PI; else if (err < -Math.PI) err += 2 * Math.PI; swayPh += err * Math.min(1, dt * 3); } }
   D.nod = Math.max(0, D.nod - dt * 3.5);
+  // breathing: in for a third of the cycle, out for half, then a rest; slower while dozing
+  for (const c of [D, S]) {
+    c.bph = (c.bph + dt / (c.doze > 0 || c.sleepy > 0 ? c.bper * 1.3 : c.bper)) % 1;
+    const t = c.bph < 0.35 ? c.bph / 0.35 : c.bph < 0.85 ? 1 - (c.bph - 0.35) / 0.5 : 0;
+    c.br = t * t * (3 - 2 * t);
+  }
+  look(D, D.cx, D.by - 20.5, dt); look(S, S.cx - 7, S.by - 34.5, dt);
   for (const c of [D, S]) { if (time > c.nextBlink) { c.blink = 0.14; c.nextBlink = time + 2.5 + Math.random() * 5; } c.blink = Math.max(0, c.blink - dt); }
   if (time > S.nextSleepy) { S.sleepy = 4 + Math.random() * 6; S.nextSleepy = time + S.sleepy + 12 + Math.random() * 20; S.purrSleepy = Math.random() < 0.7; }
   S.sleepy = Math.max(0, S.sleepy - dt);
@@ -2017,11 +2195,20 @@ function update(dt) {
   purrTick();
   if (time > S.nextTwitch) { S.twitch = 0.9; S.nextTwitch = time + 3 + Math.random() * 7; }
   S.twitch = Math.max(0, S.twitch - dt);
-  if (playing) reelA += dt * 3.2;
+  // reels turn with the tempo (3.24 s is a bar at 74 bpm) and wind down with a tape stop
+  if (playing) reelA += dt * 3.2 * BEAT.rate * (BEAT.barDur ? 3.24 / BEAT.barDur : 1) * (1 + 7 * ffwd);
+  ffwd = Math.max(0, ffwd - dt * 1.6); flare = Math.max(0, flare - dt * 4);
+  if (roomFade < 1) roomFade = Math.min(1, roomFade + dt / roomFadeT);
   if (AC && analyser) {
-    const buf = update.buf || (update.buf = new Float32Array(analyser.fftSize));
-    analyser.getFloatTimeDomainData(buf); let s = 0; for (const v of buf) s += v * v;
-    const rms = Math.sqrt(s / buf.length); vu += ((playing ? rms : 0) - vu) * (rms > vu ? 0.5 : 0.08);
+    const fb = update.fb || (update.fb = new Uint8Array(analyser.frequencyBinCount));
+    analyser.getByteFrequencyData(fb);
+    for (let i = 0; i < 6; i++) {
+      let m = 0; for (let k = SPEC_EDGE[i]; k < SPEC_EDGE[i + 1]; k++) m = Math.max(m, fb[k]);
+      // each band is read against its own recent peak (55 steps is about 15 dB), so any mix fills the meter
+      specPk[i] = Math.max(m, specPk[i] - dt * 6, 90);
+      const v = playing ? clamp(1 - (specPk[i] - m) / 55, 0, 1) : 0;
+      BEAT.spec[i] += (v - BEAT.spec[i]) * (v > BEAT.spec[i] ? 0.6 : 0.14);
+    }
   }
   for (const c of OUT.clouds) { c.x += c.v * dt; if (c.x > 240) c.x = 90 - c.w; }
   for (const d of rainDrops) { d.y += d.s * dt; d.x += d.s * dt * 0.22; if (d.y > 108) { d.y = 12 - Math.random() * 20; d.x = 84 + Math.random() * 150; } }
@@ -2040,7 +2227,7 @@ function update(dt) {
   }
   steamT -= dt;
   if (steamT <= 0) { steam.push({ x: 95.5 + Math.random() * 3, y: 135, a: 0, p: Math.random() * 6 }); steamT = 0.35; }
-  steam.forEach(s => { s.a += dt; s.y -= dt * 5; }); steam = steam.filter(s => s.a < 3.4);
+  steam.forEach(s => { s.a += dt; s.y -= dt * (s.v || 5); }); steam = steam.filter(s => s.a < 3.4);
   for (const m of motes) { m.y -= dt * (0.6 + Math.sin(time * 0.3 + m.p) * 0.6); m.x += Math.sin(time * 0.4 + m.p * 3) * dt * 1.5; if (m.y < 86) { m.y = 134; m.x = 22 + Math.random() * 60; } }
   if (!OUT.rain && OUT.t > 0.6) {
     nextShoot -= dt;
@@ -2078,45 +2265,51 @@ function draw() {
   for (const d of rainDrops) for (let k = 0; k < 3; k++) px(d.x - k * 0.22, d.y - k, '#aebfdc', 0.32 - k * 0.09);
   for (const d of glassDrops) { px(d.x, d.y, '#dfe8f6', 0.6); px(d.x, d.y + 1, '#0b0f20', 0.35); if (d.v) px(d.x, d.y - 1, '#c8d4ea', 0.25); }
   g.globalAlpha = 1;
-  g.drawImage(roomCv, 0, 0);
+  if (roomFade < 1) { g.drawImage(roomPrev, 0, 0); g.globalAlpha = roomFade; }
+  g.drawImage(roomCv, 0, 0); g.globalAlpha = 1;
+  // the lamp swells a little with each kick and chord
+  if (ST.lamp && BEAT.glow * ST.beat > 0.01) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.45 * BEAT.glow * ST.beat; g.drawImage(glowCv, 0, 0); g.globalCompositeOperation = 'source-over'; }
 
-  // fairy lights
+  // fairy lights: slow shimmer, a pulse that runs along the string on each chord, a sparkle on some hats
   for (const b of bulbs) {
     const v = 0.55 + 0.45 * Math.sin(time * 0.9 + b.p);
-    rectA(b.x - 1, b.y - 1, 3, 3, b.c, 0.16 * v);
-    px(b.x, b.y, b.c, 0.55 + 0.45 * v);
+    let w = 0; for (const q of waves) w = Math.max(w, Math.exp(-(((b.x - 64 - q.a * 200) / 15) ** 2)));
+    w *= ST.beat;
+    rectA(b.x - 1, b.y - 1, 3, 3, b.c, 0.16 * v + 0.3 * w);
+    px(b.x, b.y, b.c, Math.min(1, 0.55 + 0.45 * v + w));
+    if (b.s > 0) { px(b.x, b.y, '#fff6e0', b.s); rectA(b.x - 1, b.y, 3, 1, '#fff6e0', 0.4 * b.s); rectA(b.x, b.y - 1, 1, 3, '#fff6e0', 0.4 * b.s); }
   }
   // dust motes in lamp light
-  for (const m of motes) px(m.x, m.y, '#ffe0a8', 0.25 + 0.25 * Math.sin(time * 1.3 + m.p));
-  // candle flame
-  { const fl = Math.sin(time * 13) + Math.sin(time * 7.3 + 1), jx = fl > 1.2 ? 1 : fl < -1.2 ? -1 : 0;
-    rectA(211, 111, 7, 8, '#ffb84a', 0.08 + 0.03 * Math.sin(time * 9));
+  if (ST.lamp) for (const m of motes) px(m.x, m.y, '#ffe0a8', 0.25 + 0.25 * Math.sin(time * 1.3 + m.p));
+  // candle flame, a little taller and brighter just after it is lit
+  if (ST.candle) { const fl = Math.sin(time * 13) + Math.sin(time * 7.3 + 1), jx = fl > 1.2 ? 1 : fl < -1.2 ? -1 : 0;
+    rectA(211, 111, 7, 8, '#ffb84a', 0.08 + 0.03 * Math.sin(time * 9) + 0.2 * flare);
     px(214, 118, '#f6a83a'); px(214, 117, '#fff1b0'); px(214, 116, '#ffe08a'); px(214 + jx, 115, '#f6a83a', 0.9);
-    if (fl > 0) px(214 + jx, 114, '#f6a83a', 0.5); }
-  // mug steam
-  for (const s of steam) px(s.x + Math.sin(s.a * 2.2 + s.p) * 1.4, s.y, '#e8d8c8', 0.32 * Math.sin(Math.PI * s.a / 3.4));
-  // boombox reels + vu
+    if (fl > 0 || flare > 0) px(214 + jx, 114, '#f6a83a', 0.5 + 0.5 * flare);
+    if (flare > 0.4) px(214, 113, '#f6a83a', flare); }
+  // mug steam, and smoke from a candle that was just blown out (same particles, their own colour)
+  for (const s of steam) px(s.x + Math.sin(s.a * 2.2 + s.p) * 1.4, s.y, s.c || '#e8d8c8', (s.c ? 0.6 : 0.32) * Math.sin(Math.PI * s.a / 3.4));
+  // boombox: speaker caps push out on the kick, reels, spectrum
+  if (BEAT.kick > 0.45) for (const cx of [252, 286]) { ellA(cx, 124, 2.4, 2.4, '#2e2e39', 1); ellA(cx, 124, 1.4, 1.4, '#3c3c4a', 1); }
   for (const [cx, cy] of [[266, 119], [272, 119]]) {
     for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; px(cx + Math.round(Math.cos(a) * 2.6), cy + Math.round(Math.sin(a) * 2.6), '#4c505c'); }
     for (let k = 0; k < 3; k++) { const a = reelA + k * Math.PI * 2 / 3; px(cx + Math.round(Math.cos(a) * 1.6), cy + Math.round(Math.sin(a) * 1.6), '#c8c0b0'); }
     px(cx, cy, '#e8e0d0');
   }
   rectA(266, 122, 7, 1, '#3a2a20', 1);
-  { const n = Math.min(6, Math.round(vu * 22)); const cols = ['#5fbf6a', '#5fbf6a', '#8fd06a', '#cfd05a', '#f0a040', '#f05a40'];
-    for (let i = 0; i < 6; i++) px(263 + i * 2, 131, i < n ? cols[i] : '#1c2420', 1); }
+  { const cols = ['#5fbf6a', '#cfd05a', '#f05a40'];
+    for (let i = 0; i < 6; i++) { const n = Math.round(BEAT.spec[i] * 3); for (let r = 0; r < 3; r++) px(263 + i * 2, 132 - r, r < n ? cols[r] : '#1c2420', 1); } }
 
   // cats
   const D = cats.devon, S = cats.sph;
   ellA(D.cx, D.by - 0.5, 11, 1.4, '#0a0610', 0.45);
   ellA(S.cx + 2, S.by - 1, 15, 1.6, '#0a0610', 0.45);
-  chain(D.cx + 7, D.by - 3, 0.3, 0.085, 16, 1.4, i => 0.05 * Math.sin(time * 1.5 - i * 0.3) * (i / 8), 2, '#cfc6cc', '#120c18');
+  chain(D.cx + 7, D.by - 3, 0.3, 0.085, 16, 1.4, i => 0.05 * Math.sin(swayPh - i * 0.3) * (i / 8), 2, '#cfc6cc', '#120c18');
   g.globalAlpha = 1;
-  g.drawImage(CAT.devonBody, D.cx - 14, D.by - 23);
-  g.drawImage(CAT.sphBody, S.cx - 18, S.by - 31);
-  chain(S.cx + 12, S.by - 6, 0.9, 0, 14, 1.5, i => i < 5 ? 0.45 : i > 10 ? 0.4 * Math.sin(time * 9) * S.twitch : 0, 1, '#736166', '#120c18');
+  g.drawImage(CAT.devonBody[D.br > 0.5 ? 1 : 0], D.cx - 14, D.by - 23);
+  g.drawImage(CAT.sphBody[S.br > 0.5 ? 1 : 0], S.cx - 18, S.by - 31);
+  chain(S.cx + 12, S.by - 6, 0.9, 0, 14, 1.5, i => i < 5 ? 0.45 : (i > 10 ? 0.4 * Math.sin(time * 9) * S.twitch : 0) + (i > 8 ? 0.22 * Math.sin(Math.PI * S.tap) : 0), 1, '#736166', '#120c18');
   g.globalAlpha = 1;
-  const sEyes = S.mouth > 0 ? CAT.sphMeow : S.blink > 0 || S.doze > 0 || (S.sleepy > 0 && S.sleepy < 1.2) ? CAT.sphClosed : S.sleepy > 0 ? CAT.sphHalf : CAT.sphOpen;
-  g.drawImage(sEyes, S.cx - 21, S.by - 50);
 
   // present
   sc.fillStyle = '#0d0912'; sc.fillRect(0, 0, screen.width, screen.height);
@@ -2127,9 +2320,12 @@ function draw() {
     sc.drawImage(e.bot, 0, 0, W, e.B, view.ox, yBot, W * view.s, Math.round(e.B * view.s));
     sc.drawImage(low, 0, 0, W, H, view.ox, yTop, W * view.s, yBot - yTop);
   } else sc.drawImage(low, 0, 0, W, H, view.ox, view.oy, W * view.s, H * view.s);
-  // Devon's head is drawn at screen resolution so the nod can be half a pixel deep
-  const nodOff = D.nod > 0 ? 0.5 * Math.sin(Math.PI * (1 - D.nod)) : 0;
-  sc.drawImage(D.mouth > 0 ? CAT.devonMeow : D.blink > 0 || D.doze > 0 ? CAT.devonClosed : CAT.devonOpen, Math.round(view.ox + (D.cx - 14) * view.s), Math.round(view.oy + (D.by - 35 + nodOff) * view.s), Math.round(28 * view.s), Math.round(22 * view.s));
+  // heads are drawn at screen resolution so a nod or a breath can move them by part of a pixel
+  const head = (spr, x, y) => sc.drawImage(spr, Math.round(view.ox + x * view.s), Math.round(view.oy + y * view.s), Math.round(spr.width * view.s), Math.round(spr.height * view.s));
+  const nodOff = D.nod > 0 ? 0.5 * Math.sin(Math.PI * (1 - D.nod)) : 0, dShut = D.mouth <= 0 && (D.blink > 0 || D.doze > 0);
+  head(dShut ? catHead('devon', 'closed', false, '', 0, 0) : catHead('devon', 'open', D.mouth > 0, '', D.lx, D.ly), D.cx - 14, D.by - 35 + nodOff - BREATH * D.br);
+  const sEyes = S.mouth > 0 ? 'open' : S.blink > 0 || S.doze > 0 || (S.sleepy > 0 && S.sleepy < 1.2) ? 'closed' : S.sleepy > 0 ? 'half' : 'open';
+  head(catHead('sph', sEyes, S.mouth > 0, S.ear > 0 ? S.earSide : '', sEyes === 'closed' ? 0 : S.lx, sEyes === 'open' ? S.ly : 0), S.cx - 21, S.by - 50 + (S.tap > 0.5 ? 1 : 0) - BREATH * S.br);
 }
 
 let lastT = performance.now(), lastSkyCheck = 0;
@@ -2143,9 +2339,8 @@ function frame(now) {
 /* =====================================================================
    BOOT
    ===================================================================== */
-CAT.devonBody = devonBody(); CAT.devonOpen = devonHead('open'); CAT.devonClosed = devonHead('closed'); CAT.devonMeow = devonHead('open', true);
-CAT.sphBody = sphynxBody(); CAT.sphOpen = sphynxHead('open'); CAT.sphHalf = sphynxHead('half'); CAT.sphClosed = sphynxHead('closed'); CAT.sphMeow = sphynxHead('open', true);
-roomCv = buildRoom();
+CAT.devonBody = [devonBody(false), devonBody(true)]; CAT.sphBody = [sphynxBody(false), sphynxBody(true)];
+roomCv = buildRoom(); glowCv = buildGlow();
 buildOutside(); spawnRain();
 resize(); syncUI(); poke();
 lastSkyCheck = performance.now();
