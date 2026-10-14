@@ -32,7 +32,7 @@ body{font-family:'VT323',ui-monospace,Menlo,Consolas,monospace;color:var(--ink);
 #vignette{position:fixed;inset:0;pointer-events:none;
   background:radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(8,4,12,.55) 100%)}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
-button:focus-visible,input:focus-visible,select:focus-visible,[role=tabpanel]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,[role=tabpanel]:focus-visible,#track-body:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 [hidden]{display:none!important}
 
 #bigplay{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
@@ -42,19 +42,25 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=tabpanel]:fo
 #bigplay svg{width:26px;height:26px}
 #bigplay:hover{color:var(--accent)}
 #bigplay.gone{opacity:0;pointer-events:none;transform:translate(-50%,-46%)}
-body:has(#hud.settings-open,#hud.volume-open) #bigplay{visibility:hidden}
+body:has(#hud.settings-open,#hud.volume-open,#hud.track-open) #bigplay{visibility:hidden}
 
 #hud{position:fixed;left:var(--hud-left);bottom:var(--hud-bottom);width:420px;
   max-width:calc(100vw - var(--hud-left) - var(--hud-right));
   max-height:calc(100vh - var(--hud-top) - var(--hud-bottom));
   max-height:calc(100dvh - var(--hud-top) - var(--hud-bottom));
   display:flex;flex-direction:column;gap:8px;transition:opacity .8s}
-#player,#panel,#volume-panel{background:var(--panel);border:2px solid var(--panel-edge);box-shadow:5px 5px 0 var(--shadow)}
+#player,#panel,#volume-panel,#track-panel{background:var(--panel);border:2px solid var(--panel-edge);box-shadow:5px 5px 0 var(--shadow)}
+#panel,#track-panel{--dim:#c2ad94;background:rgba(17,12,24,.96)}
 #player{display:grid;grid-template-columns:44px minmax(0,1fr) repeat(3,44px);align-items:center;gap:4px;padding:8px;flex-shrink:0}
 body.idle #hud{opacity:0}
 body.idle #hud:focus-within{opacity:1}
 body.idle{cursor:none}
-.np{min-width:0;padding:0 4px}
+.np{min-width:0;min-height:44px;padding:0 4px;text-align:left;touch-action:manipulation}
+.np > span{display:block}
+.np .track-line{display:flex;align-items:center;gap:4px}
+.track-chevron{width:8px;height:8px;flex-shrink:0;color:var(--dim);shape-rendering:crispEdges}
+#track-toggle:hover #title,#track-toggle[aria-expanded="true"] #title{color:var(--accent)}
+#track-toggle[aria-expanded="true"] .track-chevron{transform:rotate(180deg);color:var(--accent)}
 #title{font-size:23px;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #meta{font-size:15px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
 .ic{flex:0 0 var(--control-size);width:var(--control-size);height:var(--control-size);
@@ -94,10 +100,21 @@ label,.setting-label{color:var(--dim)}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--accent-ink);border-color:var(--ink)}
 .seg button:hover,.text-button:hover{border-color:var(--accent)}
 .select-row{grid-template-columns:72px minmax(0,1fr)}
+.room-pair{gap:8px}
+.room-pair label{display:block;font-size:17px;margin-bottom:4px}
 select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border:2px solid var(--panel-edge);border-radius:0;min-width:0;width:100%;min-height:44px;padding:4px 8px;cursor:pointer}
 .text-button{display:flex;align-items:center;justify-content:center;gap:8px;width:100%}
 .text-button svg{width:18px;height:18px;shape-rendering:crispEdges}
 #volume-panel{flex-shrink:0;padding:8px 12px;font-size:19px}
+#track-panel{display:flex;flex-direction:column;min-height:0;padding:6px;font-size:19px}
+#track-panel h2{font-size:19px;font-weight:normal;color:var(--dim);margin:0 4px}
+#track-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:12px 6px 6px;scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
+#track-name{font-size:26px;line-height:1.05;overflow-wrap:anywhere;margin:0}
+#track-status{color:var(--dim);font-size:17px;margin:6px 0 0}
+#track-empty{color:var(--dim);font-size:18px;line-height:1.2;margin:12px 0 0}
+#track-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin:14px 0 0}
+#track-facts dt{font-size:16px;color:var(--dim);margin-bottom:2px}
+#track-facts dd{margin:0;overflow-wrap:anywhere;line-height:1.1}
 .help-copy{font-size:18px;line-height:1.2;margin:0;color:var(--dim)}
 .shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:4px 0;font-size:17px}
 .shortcuts div{display:flex;align-items:center;gap:8px}
@@ -144,22 +161,25 @@ select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border
         </div><div class="seg" id="licks"><button data-v="licks" aria-label="Jazz licks" title="1-2 short jazz licks per track">jazz</button></div></div></div>
       </div>
       <div id="settings-room" role="tabpanel" aria-labelledby="tab-room" hidden>
-        <div class="f select-row"><label for="sky">sky</label><select id="sky" title="Auto follows the time of day">
-          <option value="auto">auto · local time</option><option value="sunrise">sunrise</option><option value="day">day</option><option value="sunset">sunset</option><option value="dusk">dusk</option><option value="night">night</option>
-        </select></div>
-        <div class="f select-row"><label for="season">season</label><select id="season" title="Auto uses autumn from September to November">
-          <option value="auto">auto · calendar</option><option value="summer">summer</option><option value="autumn">autumn</option>
-        </select></div>
+        <div class="pair room-pair">
+          <div><label for="sky">sky</label><select id="sky" title="Auto follows the time of day">
+            <option value="auto">auto</option><option value="sunrise">sunrise</option><option value="day">day</option><option value="sunset">sunset</option><option value="dusk">dusk</option><option value="night">night</option>
+          </select></div>
+          <div><label for="season">season</label><select id="season" title="Auto uses autumn from September to November">
+            <option value="auto">auto</option><option value="summer">summer</option><option value="autumn">autumn</option>
+          </select></div>
+        </div>
         <div class="f select-row"><label for="weather">weather</label><select id="weather" title="Clicking the window cycles through these too">
           <option value="clear">clear</option><option value="rain">rain</option><option value="storm">storm</option><option value="snow">snow</option><option value="fog">fog</option>
         </select></div>
         <div class="f"><label for="beat">motion</label><input id="beat" type="range" min="0" max="1" step="0.01" title="How much the room moves with the beat"><span class="val" id="beatv"></span></div>
-        <button id="fs" class="text-button" title="Fullscreen (F)" aria-label="Fullscreen">
-          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h4v2H4v2H2zM10 2h4v4h-2V4h-2zM2 10h2v2h2v2H2zM12 10h2v4h-4v-2h2z"/></svg>fullscreen
-        </button>
       </div>
       <div id="settings-help" role="tabpanel" aria-labelledby="tab-help" tabindex="0" hidden>
         <p class="help-copy">Tap a cat to say hi. Hold to pet.<br>The lamp, candle, mug, window and tape deck respond to a tap, too.</p>
+        <p class="help-copy">Auto sky follows local time. Auto season turns to autumn from September to November.</p>
+        <button id="fs" class="text-button" title="Fullscreen (F)" aria-label="Fullscreen">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h4v2H4v2H2zM10 2h4v4h-2V4h-2zM2 10h2v2h2v2H2zM12 10h2v4h-4v-2h2z"/></svg>fullscreen
+        </button>
         <dl class="shortcuts" aria-label="Keyboard shortcuts">
           <div><dt>space</dt><dd>play / pause</dd></div><div><dt>n</dt><dd>next track</dd></div>
           <div><dt>r</dt><dd>rain</dd></div><div><dt>s</dt><dd>snow</dd></div>
@@ -172,9 +192,31 @@ select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border
   <div id="volume-panel" role="region" aria-label="Volume" hidden>
     <div class="f"><label for="vol">volume</label><input id="vol" type="range" min="0" max="1" step="0.01"><span class="val" id="volv"></span></div>
   </div>
+  <section id="track-panel" aria-labelledby="track-heading" hidden>
+    <div class="panel-head">
+      <h2 id="track-heading">track details</h2>
+      <button id="track-close" class="ic" aria-label="Close track details" title="Close track details (Esc)">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3 2L8 7L13 2L14 3L9 8L14 13L13 14L8 9L3 14L2 13L7 8L2 3Z"/></svg>
+      </button>
+    </div>
+    <div id="track-body" tabindex="0">
+      <p id="track-name">lamplight room</p>
+      <p id="track-status">live synthesized lofi</p>
+      <p id="track-empty">Start the music to see the key, tempo and instruments.</p>
+      <dl id="track-facts" hidden>
+        <div><dt>key</dt><dd id="track-key"></dd></div>
+        <div><dt>tempo</dt><dd id="track-tempo"></dd></div>
+        <div><dt>instruments</dt><dd id="track-sound"></dd></div>
+        <div><dt>texture</dt><dd id="track-texture"></dd></div>
+      </dl>
+    </div>
+  </section>
   <div id="player" role="group" aria-label="Music player">
     <button id="play" class="ic" title="Play / pause (Space)" aria-label="Play"></button>
-    <div class="np"><div id="title">lamplight room</div><div id="meta">live lofi radio</div></div>
+    <button id="track-toggle" class="np" aria-label="Track details: lamplight room" aria-expanded="false" aria-controls="track-panel" title="Track details">
+      <span class="track-line"><span id="title">lamplight room</span><svg class="track-chevron" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true"><path d="M3 2h2v1h1v1h1v2H5V5H3v1H1V4h1V3h1z"/></svg></span>
+      <span id="meta">live lofi radio</span>
+    </button>
     <button id="next" class="ic" title="Next track (N)" aria-label="Next track">
       <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h2v1h1v1h1v1h1v1h1v2H7v1H6v1H5v1H4v1H2zM9 3h2v1h1v1h1v1h1v1h0v2h-1v1h-1v1h-1v1h-1v1H9z"/></svg>
     </button>
@@ -1466,14 +1508,24 @@ function startTicker() {
 const $ = id => document.getElementById(id);
 const ICON_PLAY = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2h2v1h1v1h1v1h1v1h1v1h1v2h-1v1h-1v1H9v1H8v1H7v1H6v1H4z"/></svg>';
 const ICON_PAUSE = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2h3v12H3zM10 2h3v12h-3z"/></svg>';
+let shownTrack = null;
 function announce(s) {
+  shownTrack = s;
   $('title').textContent = s.title;
-  $('title').title = `${s.title} · ${s.key.n} ${MODES[s.mode].label} · ${songBpm(s)} bpm${s.half ? ' half-time' : ''} · ${HARM[s.harm].label} + ${LEAD[s.lead].label} · ${s.ch.label} · track ${String(s.no).padStart(2, '0')}`;
+  $('track-toggle').setAttribute('aria-label', `Track details: ${s.title}`);
+  $('track-name').textContent = s.title;
+  $('track-key').textContent = `${s.key.n} ${MODES[s.mode].label}`;
+  $('track-sound').textContent = `${HARM[s.harm].label} + ${LEAD[s.lead].label}`;
+  $('track-texture').textContent = s.ch.label;
+  $('track-empty').hidden = true;
+  $('track-facts').hidden = false;
   syncTrackStatus(s);
   document.title = `${s.title} · LofiSy`;
 }
-function syncTrackStatus(s = song) {
+function syncTrackStatus(s = shownTrack) {
   $('meta').textContent = s ? `${playing ? 'playing' : 'paused'} · ${songBpm(s)} bpm` : 'live lofi radio';
+  $('track-status').textContent = s ? `track ${String(s.no).padStart(2, '0')} · ${playing ? 'playing' : 'paused'}` : 'live synthesized lofi';
+  if (s) $('track-tempo').textContent = `${songBpm(s)} bpm${s.half ? ' · half-time' : ''}`;
 }
 function syncUI() {
   $('play').innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
@@ -1552,7 +1604,7 @@ function setSettingsTab(name, focus = false) {
 }
 function setSettings(open, restoreFocus = true) {
   const wasOpen = !$('panel').hidden;
-  if (open) setVolumePanel(false, false);
+  if (open) { setVolumePanel(false, false); setTrackPanel(false, false); }
   $('panel').hidden = !open;
   $('hud').classList.toggle('settings-open', open);
   $('gear').setAttribute('aria-expanded', open);
@@ -1562,12 +1614,22 @@ function setSettings(open, restoreFocus = true) {
 }
 function setVolumePanel(open, restoreFocus = true) {
   const wasOpen = !$('volume-panel').hidden;
-  if (open) setSettings(false, false);
+  if (open) { setSettings(false, false); setTrackPanel(false, false); }
   $('volume-panel').hidden = !open;
   $('hud').classList.toggle('volume-open', open);
   $('volume-toggle').setAttribute('aria-expanded', open);
   if (open) $('vol').focus({ preventScroll: true });
   else if (wasOpen && restoreFocus) $('volume-toggle').focus({ preventScroll: true });
+  poke();
+}
+function setTrackPanel(open, restoreFocus = true) {
+  const wasOpen = !$('track-panel').hidden;
+  if (open) { setSettings(false, false); setVolumePanel(false, false); }
+  $('track-panel').hidden = !open;
+  $('hud').classList.toggle('track-open', open);
+  $('track-toggle').setAttribute('aria-expanded', open);
+  if (open) { $('track-body').scrollTop = 0; $('track-body').focus({ preventScroll: true }); }
+  else if (wasOpen && restoreFocus) $('track-toggle').focus({ preventScroll: true });
   poke();
 }
 $('settings-tabs').onclick = e => { if (e.target.dataset.tab) setSettingsTab(e.target.dataset.tab); };
@@ -1585,11 +1647,13 @@ $('settings-tabs').onkeydown = e => {
 $('gear').onclick = () => setSettings($('panel').hidden);
 $('panel-close').onclick = () => setSettings(false);
 $('volume-toggle').onclick = () => setVolumePanel($('volume-panel').hidden);
+$('track-toggle').onclick = () => setTrackPanel($('track-panel').hidden);
+$('track-close').onclick = () => setTrackPanel(false);
 addEventListener('pointerdown', e => {
-  if (!$('hud').contains(e.target)) { setSettings(false, false); setVolumePanel(false, false); }
+  if (!$('hud').contains(e.target)) { setSettings(false, false); setVolumePanel(false, false); setTrackPanel(false, false); }
 });
 $('vol').oninput = e => setVol(+e.target.value);
-$('bpm').oninput = e => { ST.bpm = +e.target.value; $('bpmv').textContent = ST.bpm; if (AC) dly.delayTime.setTargetAtTime(60 / songBpm(song) * 0.75, AC.currentTime, 0.2); if (song) announce(song); save(); };
+$('bpm').oninput = e => { ST.bpm = +e.target.value; $('bpmv').textContent = ST.bpm; if (AC) dly.delayTime.setTargetAtTime(60 / songBpm(song) * 0.75, AC.currentTime, 0.2); if (shownTrack) announce(shownTrack); save(); };
 $('purr').oninput = e => { ST.purr = +e.target.value; $('purrv').textContent = Math.round(ST.purr * 100); if (purrBus) purrBus.gain.setTargetAtTime(ST.purr, AC.currentTime, 0.05); save(); };
 $('beat').oninput = e => { ST.beat = +e.target.value; $('beatv').textContent = Math.round(ST.beat * 100); save(); };
 $('vinyl').oninput = e => { ST.vinyl = +e.target.value; $('vinylv').textContent = Math.round(ST.vinyl * 100); if (AC) vinylG.gain.setTargetAtTime(ST.vinyl * 0.7, AC.currentTime, 0.05); save(); };
@@ -1609,7 +1673,12 @@ $('licks').onclick = () => {
 };
 addEventListener('keydown', e => {
   // Keep shortcuts out of native form controls; Escape always closes the open panel.
-  if (e.code === 'Escape') { if (!$('volume-panel').hidden) setVolumePanel(false); else setSettings(false); return; }
+  if (e.code === 'Escape') {
+    if (!$('track-panel').hidden) setTrackPanel(false);
+    else if (!$('volume-panel').hidden) setVolumePanel(false);
+    else setSettings(false);
+    return;
+  }
   if (e.code === 'Space' && e.target.tagName === 'BUTTON') return;
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
   if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
@@ -1623,7 +1692,7 @@ addEventListener('keydown', e => {
   poke();
 });
 let idleT = 0;
-function poke() { document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => { if (playing && $('panel').hidden && $('volume-panel').hidden && !$('hud').matches(':hover, :focus-within')) document.body.classList.add('idle'); }, 3500); }
+function poke() { document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => { if (playing && $('panel').hidden && $('volume-panel').hidden && $('track-panel').hidden && !$('hud').matches(':hover, :focus-within')) document.body.classList.add('idle'); }, 3500); }
 addEventListener('pointermove', poke); addEventListener('pointerdown', poke);
 
 /* =====================================================================
