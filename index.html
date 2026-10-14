@@ -1705,26 +1705,76 @@ function makeBolt() {
 // a strike's brightness over time: a sharp flash and a fainter second one; gentler for people who ask for less motion
 const CALM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const flashAt = t => t < 0 || t > 1.2 ? 0 : Math.max(Math.exp(-t / 0.07), !CALM && t > 0.22 ? 0.65 * Math.exp(-(t - 0.22) / 0.09) : 0) * (CALM ? 0.35 : 1);
-// the reels turn by redrawing a disc of the picture rotated, one frame per 5 degrees
-const REELS = [[287, 121], [332, 121]], REEL_R = 15, REEL_N = 72;
-let reelFrames = [];   // cut from the lit room; each lamp-off light cuts its own (ART.lights[k].reels)
+// the reels turn by redrawing the picture's left reel rotated, one frame per 5 degrees. The picture drew its two reels
+// unalike, so the right spindle gets the left reel too, 44 px over. Its hub and its windows were drawn a little off
+// each other, so each turns about its own middle (where a third of a turn matches the picture best); the rim, out to
+// RIM_R, stays still. A pixel takes 4x4 samples, so edges do not step as they turn, and the light stays put: the
+// picture is divided by the light on the left reel's flange and multiplied by the light on the reel it is drawn on.
+const REEL_HUB = [286.9, 120.15], HUB_R = 6.5, REEL_MID = [286.65, 119.8], REEL_R = 15.5, RIM_R = 17.6, REEL_N = 72;
+const REEL_AT = [0, 44], REEL_X = Math.round(REEL_MID[0]), REEL_Y = Math.round(REEL_MID[1]), REEL_B = Math.ceil(RIM_R);
+let reelFrames = [];   // [reel][frame], cut from the lit room; each lamp-off light cuts its own (ART.lights[k].reels)
 function buildReels() {
   if (!ART.d) return;
   reelFrames = reelsOf(ART.d);
   for (const Lt of Object.values(ART.lights)) Lt.reels = reelsOf(Lt.d);
 }
 const reelsIn = k => (ART.lights[k] && ART.lights[k].reels) || reelFrames;
+// the light on the flange of the reel at cx, cy, as (x, y, channel) => level: a plane per channel through the brighter
+// half of the reel's pixels, fitted by least squares
+function flangeLight(d, cx, cy) {
+  const P = [];
+  for (let y = Math.floor(cy - REEL_R); y <= cy + REEL_R; y++) for (let x = Math.floor(cx - REEL_R); x <= cx + REEL_R; x++)
+    if ((x - cx) ** 2 + (y - cy) ** 2 <= REEL_R * REEL_R) P.push([x - cx, y - cy, (y * W + x) * 4]);
+  const mid = avg(P.map(p => lum(d, p[2]))), F = P.filter(p => lum(d, p[2]) >= mid);
+  const mu = avg(F.map(p => p[0])), mv = avg(F.map(p => p[1]));
+  let uu = 0, vv = 0, uv = 0;
+  for (const [u, v] of F) { uu += (u - mu) ** 2; vv += (v - mv) ** 2; uv += (u - mu) * (v - mv); }
+  const det = uu * vv - uv * uv, K = [0, 1, 2].map(c => {
+    const m = avg(F.map(p => d[p[2] + c]));
+    let uc = 0, vc = 0;
+    for (const [u, v, i] of F) { uc += (u - mu) * (d[i + c] - m); vc += (v - mv) * (d[i + c] - m); }
+    return [m, (vv * uc - uv * vc) / det, (uu * vc - uv * uc) / det];
+  });
+  return (x, y, c) => Math.max(1, K[c][0] + K[c][1] * (x - cx - mu) + K[c][2] * (y - cy - mv));
+}
 function reelsOf(d) {
-  const S = 2 * REEL_R + 1;
-  return REELS.map(([cx, cy]) => Array.from({ length: REEL_N }, (_, k) => {
-    const b = new Buf(S, S), a = k / REEL_N * 2 * Math.PI, c = Math.cos(a), s = Math.sin(a);
-    for (let dy = -REEL_R; dy <= REEL_R; dy++) for (let dx = -REEL_R; dx <= REEL_R; dx++) {
-      if (dx * dx + dy * dy > REEL_R * REEL_R + REEL_R) continue;
-      const i = (Math.round(cy + dx * s + dy * c) * W + Math.round(cx + dx * c - dy * s)) * 4;
-      b.set(dx + REEL_R, dy + REEL_R, pack([d[i], d[i + 1], d[i + 2]]));
+  const [mx, my] = REEL_MID, S = 2 * REEL_B + 1, x0 = REEL_X - REEL_B, y0 = REEL_Y - REEL_B, L = flangeLight(d, mx, my);
+  // over the box: the left reel's colours without its light, and the light on each reel
+  const own = new Float32Array(S * S * 3), lit = REEL_AT.map(() => new Float32Array(S * S * 3)), lights = REEL_AT.map(ox => flangeLight(d, mx + ox, my));
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) for (let c = 0; c < 3; c++) {
+    const p = (y * S + x) * 3 + c;
+    own[p] = d[((y0 + y) * W + x0 + x) * 4 + c] / L(x0 + x, y0 + y, c);
+    REEL_AT.forEach((ox, r) => { lit[r][p] = lights[r](x0 + x + ox, y0 + y, c); });
+  }
+  // the samples, six numbers each: the pixel, its weight, the middle it turns about, its offset from that middle. The
+  // rim takes one sample a pixel, which is its own middle, so it does not turn.
+  const smp = [], inside = new Uint8Array(S * S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const r2 = (x0 + x - mx) ** 2 + (y0 + y - my) ** 2, n = r2 <= REEL_R * REEL_R ? 4 : 1;
+    if (r2 > RIM_R * RIM_R) continue;
+    inside[y * S + x] = 1;
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const px = x0 + x + (i + 0.5) / n - 0.5, py = y0 + y + (j + 0.5) / n - 0.5;
+      const [cx, cy] = n === 1 ? [px, py] : (px - REEL_HUB[0]) ** 2 + (py - REEL_HUB[1]) ** 2 <= HUB_R * HUB_R ? REEL_HUB : REEL_MID;
+      smp.push(y * S + x, 1 / (n * n), cx, cy, px - cx, py - cy);
     }
-    return b.flush();
-  }));
+  }
+  const frames = REEL_AT.map(() => []), acc = new Float32Array(S * S * 3);
+  for (let k = 0; k < REEL_N; k++) {
+    const a = k / REEL_N * 2 * Math.PI, cs = Math.cos(a), sn = Math.sin(a);
+    acc.fill(0);
+    for (let s = 0; s < smp.length; s += 6) {   // each sample takes the colour from where the turn started
+      const p = smp[s] * 3, w = smp[s + 1], u = smp[s + 4], v = smp[s + 5];
+      const q = ((Math.round(smp[s + 3] + u * sn + v * cs) - y0) * S + Math.round(smp[s + 2] + u * cs - v * sn) - x0) * 3;
+      acc[p] += own[q] * w; acc[p + 1] += own[q + 1] * w; acc[p + 2] += own[q + 2] * w;
+    }
+    REEL_AT.forEach((_, r) => {
+      const b = new Buf(S, S), at = (p, c) => clamp(Math.round(acc[p * 3 + c] * lit[r][p * 3 + c]), 0, 255);
+      for (let p = 0; p < S * S; p++) if (inside[p]) b.set(p % S, (p / S) | 0, pack([at(p, 0), at(p, 1), at(p, 2)]));
+      frames[r].push(b.flush());
+    });
+  }
+  return frames;
 }
 // the tape deck's meters: two rows of six LEDs (four green, amber, red), the low and the high half of the spectrum
 const LEDS = { x: 304, rows: [154, 157], on: ['#7ce08a', '#7ce08a', '#7ce08a', '#7ce08a', '#ffc04e', '#ff5a44'], off: ['#173020', '#173020', '#173020', '#173020', '#3a2a12', '#3a1612'] };
@@ -2107,6 +2157,12 @@ function draw() {
   g.globalAlpha = 1;
   if (roomFade < 1) { g.drawImage(roomPrev, 0, 0); g.globalAlpha = roomFade; }
   g.drawImage(roomCv, 0, 0); g.globalAlpha = 1;
+  // while the room fades after a lamp switch, the reels and cats fade over from the old light to the new one
+  const light = lightNow(), lights = roomFade < 1 && lightWas !== light ? [[lightWas, 1], [light, roomFade]] : [[light, 1]];
+  // the tape deck's reels go on with the room, so the lamp's swell and a flash light them as they light the deck
+  if (reelFrames.length) { const k = ((Math.round(reelA / (2 * Math.PI) * REEL_N) % REEL_N) + REEL_N) % REEL_N;
+    for (const [L, a] of lights) { const f = reelsIn(L); g.globalAlpha = a; REEL_AT.forEach((ox, r) => g.drawImage(f[r][k], REEL_X + ox - REEL_B, REEL_Y - REEL_B)); }
+    g.globalAlpha = 1; }
   // the lamp swells a little with each kick and chord
   if (ST.lamp && BEAT.glow * ST.beat > 0.01) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.45 * BEAT.glow * ST.beat; g.drawImage(glowCv, 0, 0); g.globalCompositeOperation = 'source-over'; }
   // a flash spills cool light from the window into the room; the cats come after, so they stay against the light
@@ -2122,12 +2178,7 @@ function draw() {
   // mug steam, and smoke from a candle that was just blown out (same particles, their own colour)
   for (const s of steam) px(s.x + Math.sin(s.a * 2.2 + s.p) * 1.4, s.y, s.c || '#e8d8c8', (s.c ? 0.6 : 0.32) * Math.sin(Math.PI * s.a / 3.4));
   g.globalAlpha = 1;
-  // while the room fades after a lamp switch, the reels and cats fade over from the old light to the new one
-  const light = lightNow(), lights = roomFade < 1 && lightWas !== light ? [[lightWas, 1], [light, roomFade]] : [[light, 1]];
-  // tape deck: reels, and the meters while music plays
-  if (reelFrames.length) { const k = ((Math.round(reelA / (2 * Math.PI) * REEL_N) % REEL_N) + REEL_N) % REEL_N;
-    for (const [L, a] of lights) { const f = reelsIn(L); g.globalAlpha = a; REELS.forEach(([cx, cy], r) => g.drawImage(f[r][k], cx - REEL_R, cy - REEL_R)); }
-    g.globalAlpha = 1; }
+  // the tape deck's meters while music plays
   if (playing) for (let r = 0; r < 2; r++) {
     const n = Math.round((BEAT.spec[r * 3] + BEAT.spec[r * 3 + 1] + BEAT.spec[r * 3 + 2]) / 3 * 6);
     for (let i = 0; i < 6; i++) px(LEDS.x + 2 * i, LEDS.rows[r], i < n ? LEDS.on[i] : LEDS.off[i]);
