@@ -23,7 +23,7 @@
   --hud-right:max(var(--hud-inset),env(safe-area-inset-right));
   --hud-bottom:max(var(--hud-inset),env(safe-area-inset-bottom));
   --hud-left:max(var(--hud-inset),env(safe-area-inset-left));
-  --control-size:32px;
+  --control-size:44px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#0d0912;overflow:hidden}
@@ -32,7 +32,8 @@ body{font-family:'VT323',ui-monospace,Menlo,Consolas,monospace;color:var(--ink);
 #vignette{position:fixed;inset:0;pointer-events:none;
   background:radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(8,4,12,.55) 100%)}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
-button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,[role=tabpanel]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
 
 #bigplay{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
   display:flex;align-items:center;gap:12px;padding:12px 22px 12px 18px;font-size:30px;letter-spacing:1px;
@@ -41,72 +42,72 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 #bigplay svg{width:26px;height:26px}
 #bigplay:hover{color:var(--accent)}
 #bigplay.gone{opacity:0;pointer-events:none;transform:translate(-50%,-46%)}
-body:has(#hud.settings-open) #bigplay{visibility:hidden}
+body:has(#hud.settings-open,#hud.volume-open) #bigplay{visibility:hidden}
 
-#hud{position:fixed;left:var(--hud-left);bottom:var(--hud-bottom);width:380px;
+#hud{position:fixed;left:var(--hud-left);bottom:var(--hud-bottom);width:420px;
   max-width:calc(100vw - var(--hud-left) - var(--hud-right));
   max-height:calc(100vh - var(--hud-top) - var(--hud-bottom));
   max-height:calc(100dvh - var(--hud-top) - var(--hud-bottom));
-  display:flex;flex-direction:column;
-  background:var(--panel);border:2px solid var(--panel-edge);box-shadow:5px 5px 0 var(--shadow);
-  padding:10px 12px 10px 14px;transition:opacity .8s}
-#hud.settings-open{width:520px}
-#hud > .np,#hud > .row{flex-shrink:0}
+  display:flex;flex-direction:column;gap:8px;transition:opacity .8s}
+#player,#panel,#volume-panel{background:var(--panel);border:2px solid var(--panel-edge);box-shadow:5px 5px 0 var(--shadow)}
+#player{display:grid;grid-template-columns:44px minmax(0,1fr) repeat(3,44px);align-items:center;gap:4px;padding:8px;flex-shrink:0}
 body.idle #hud{opacity:0}
 body.idle #hud:focus-within{opacity:1}
 body.idle{cursor:none}
-.np .lbl{font-size:15px;color:var(--dim);letter-spacing:2px;text-transform:uppercase}
-#title{font-size:28px;line-height:1;margin:2px 0 1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}
-#meta{font-size:16px;color:var(--dim);max-width:320px}
-.row{display:flex;align-items:center;gap:6px;margin-top:8px}
+.np{min-width:0;padding:0 4px}
+#title{font-size:23px;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#meta{font-size:15px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
 .ic{flex:0 0 var(--control-size);width:var(--control-size);height:var(--control-size);
   display:grid;place-items:center;border:2px solid transparent;touch-action:manipulation}
 .ic svg{width:18px;height:18px;shape-rendering:crispEdges}
 .ic:hover{color:var(--accent)}
-.ic[aria-pressed="true"]{color:var(--accent);border-color:var(--panel-edge)}
-input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:96px;height:24px;margin:0 4px}
+.ic[aria-expanded="true"]{color:var(--accent);border-color:var(--panel-edge);background:rgba(243,226,196,.05)}
+#play{background:var(--accent);color:var(--accent-ink)}
+#play:hover{background:var(--ink)}
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:100%;min-width:0;height:44px;margin:0;touch-action:pan-y}
 input[type=range]::-webkit-slider-runnable-track{height:4px;background:var(--panel-edge)}
 input[type=range]::-moz-range-track{height:4px;background:var(--panel-edge)}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:14px;margin-top:-5px;background:var(--ink);border:0;border-radius:0}
-input[type=range]::-moz-range-thumb{width:10px;height:14px;background:var(--ink);border:0;border-radius:0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:20px;margin-top:-8px;background:var(--ink);border:0;border-radius:0}
+input[type=range]::-moz-range-thumb{width:14px;height:20px;background:var(--ink);border:0;border-radius:0}
 input[type=range]:hover::-webkit-slider-thumb{background:var(--accent)}
 
-#panel{margin-top:10px;border-top:2px solid var(--panel-edge);font-size:19px;
-  display:flex;flex-direction:column;min-height:0}
-#panel[hidden]{display:none}
-.panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;padding:4px 0}
-.panel-head h2{font-size:19px;font-weight:normal;letter-spacing:2px;margin:0;text-transform:uppercase}
-#panel-body{overflow-y:auto;overscroll-behavior:contain;min-height:0;padding:4px;
-  display:grid;gap:8px;scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
-#panel .f{display:grid;grid-template-columns:88px minmax(0,1fr) 32px;align-items:center;gap:8px}
-#panel .f > :first-child{color:var(--dim)}
-#panel .f > input{width:100%;min-width:0;margin:0}
-#panel .val{text-align:right}
-#panel .seg{grid-column:2 / -1}
-.seg{display:flex;gap:4px;flex-wrap:wrap}
-.seg button{min-height:32px;padding:3px 7px;border:2px solid var(--panel-edge);font-size:17px;touch-action:manipulation}
+#panel{font-size:19px;display:flex;flex-direction:column;min-height:0;padding:6px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:4px;flex-shrink:0;border-bottom:2px solid var(--panel-edge)}
+#settings-tabs{display:flex;gap:4px}
+[role=tab]{min-width:56px;min-height:44px;padding:0 10px;font-size:19px;color:var(--dim);border-bottom:2px solid transparent;touch-action:manipulation}
+[role=tab][aria-selected="true"]{color:var(--accent);border-color:var(--accent)}
+#panel-body{overflow-y:auto;overscroll-behavior:contain;min-height:0;padding:8px 4px 4px;
+  scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
+[role=tabpanel]{display:grid;gap:8px}
+.f{display:grid;grid-template-columns:72px minmax(0,1fr) 28px;align-items:center;gap:8px;min-height:44px}
+label,.setting-label{color:var(--dim)}
+.val{text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.dial label{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.setting-label{display:block;margin-bottom:6px;font-size:17px}
+.seg{display:flex;gap:4px}
+.seg button,.text-button{min-height:44px;padding:6px 10px;border:2px solid var(--panel-edge);font-size:17px;touch-action:manipulation}
+#layers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+#layers button{min-width:0;padding:6px 2px}
+.mix{display:grid;grid-template-columns:minmax(0,4fr) minmax(44px,1fr);gap:8px}
+#licks button{width:100%;padding:6px 2px}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--accent-ink);border-color:var(--ink)}
-.seg button:hover{border-color:var(--accent)}
-.keys{font-size:15px;color:var(--dim)}
+.seg button:hover,.text-button:hover{border-color:var(--accent)}
+.select-row{grid-template-columns:72px minmax(0,1fr)}
+select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border:2px solid var(--panel-edge);border-radius:0;min-width:0;width:100%;min-height:44px;padding:4px 8px;cursor:pointer}
+.text-button{display:flex;align-items:center;justify-content:center;gap:8px;width:100%}
+.text-button svg{width:18px;height:18px;shape-rendering:crispEdges}
+#volume-panel{flex-shrink:0;padding:8px 12px;font-size:19px}
+.help-copy{font-size:18px;line-height:1.2;margin:0;color:var(--dim)}
+.shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:4px 0;font-size:17px}
+.shortcuts div{display:flex;align-items:center;gap:8px}
+.shortcuts dt{min-width:38px;text-align:center;border:1px solid var(--panel-edge);padding:2px;color:var(--ink)}
+.shortcuts dd{margin:0;color:var(--dim)}
 @media (max-width:700px),(pointer:coarse){
-  :root{--hud-inset:8px;--control-size:44px}
-  #hud{width:430px;padding:8px}
-  input[type=range]{height:44px}
-  input[type=range]::-webkit-slider-thumb{width:16px;height:24px;margin-top:-10px}
-  input[type=range]::-moz-range-thumb{width:16px;height:24px}
-  .seg button{min-width:44px;min-height:44px;padding:6px 9px}
+  :root{--hud-inset:8px}
 }
 @media (max-width:480px){
   #hud{width:calc(100vw - var(--hud-left) - var(--hud-right))}
-  #panel-body{max-height:40vh;max-height:40dvh}
-  #panel .f{grid-template-columns:80px minmax(0,1fr) 30px;gap:6px}
-  #panel .f:has(.seg){grid-template-columns:minmax(0,1fr);gap:4px}
-  #panel .seg{grid-column:1}
-}
-@media (max-width:440px){
-  .row{display:grid;grid-template-columns:repeat(6,minmax(44px,1fr));gap:4px}
-  .row .ic{width:100%}
-  #vol{grid-column:1 / -1;grid-row:2;width:100%;margin:0}
 }
 </style>
 </head>
@@ -120,59 +121,69 @@ input[type=range]:hover::-webkit-slider-thumb{background:var(--accent)}
 </button>
 
 <div id="hud">
-  <div class="np">
-    <div class="lbl">now playing</div>
-    <div id="title">lamplight room</div>
-    <div id="meta">live synthesized lofi</div>
-  </div>
-  <div class="row">
-    <button id="play" class="ic" title="Play / pause (Space)" aria-label="Play"></button>
-    <button id="next" class="ic" title="Next track (N)" aria-label="Next track">
-      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h2v1h1v1h1v1h1v1h1v2H7v1H6v1H5v1H4v1H2zM9 3h2v1h1v1h1v1h1v1h0v2h-1v1h-1v1h-1v1h-1v1H9z"/></svg>
-    </button>
-    <input id="vol" type="range" min="0" max="1" step="0.01" aria-label="Volume" title="Volume">
-    <button id="rain" class="ic" title="Rain (R)" aria-label="Rain" aria-pressed="false">
-      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M6 2h4v1h1v1h2v1h1v3h-1v1H3V8H2V6h1V5h1V4h1V3h1zM4 11h1v1H4zM3 13h1v1H3zM8 11h1v1H8zM7 13h1v1H7zM12 11h1v1h-1zM11 13h1v1h-1z"/></svg>
-    </button>
-    <button id="snow" class="ic" title="Snow (S)" aria-label="Snow" aria-pressed="false">
-      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2h1v13H8zM2 8h13v1H2zM4 4h1v1h-1zM5 5h1v1h-1zM6 6h1v1h-1zM7 7h1v1h-1zM9 9h1v1h-1zM10 10h1v1h-1zM11 11h1v1h-1zM12 12h1v1h-1zM12 4h1v1h-1zM11 5h1v1h-1zM10 6h1v1h-1zM9 7h1v1h-1zM7 9h1v1h-1zM6 10h1v1h-1zM5 11h1v1h-1zM4 12h1v1h-1zM7 3h1v1h-1zM9 3h1v1h-1zM7 13h1v1h-1zM9 13h1v1h-1zM3 7h1v1h-1zM3 9h1v1h-1zM13 7h1v1h-1zM13 9h1v1h-1z"/></svg>
-    </button>
-    <button id="gear" class="ic" title="Settings" aria-label="Settings" aria-expanded="false" aria-controls="panel">
-      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h12v1H2zM4 2h2v3H4zM2 8h12v1H2zM10 7h2v3h-2zM2 12h12v1H2zM6 11h2v3H6z"/></svg>
-    </button>
-    <button id="fs" class="ic" title="Fullscreen (F)" aria-label="Fullscreen">
-      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h4v2H4v2H2zM10 2h4v4h-2V4h-2zM2 10h2v2h2v2H2zM12 10h2v4h-4v-2h2z"/></svg>
-    </button>
-  </div>
-  <div id="panel" role="region" aria-labelledby="settings-title" hidden>
+  <section id="panel" aria-label="Settings" hidden>
     <div class="panel-head">
-      <h2 id="settings-title">settings</h2>
+      <div id="settings-tabs" role="tablist" aria-label="Settings">
+        <button id="tab-sound" role="tab" aria-selected="true" aria-controls="settings-sound" data-tab="sound">sound</button>
+        <button id="tab-room" role="tab" aria-selected="false" aria-controls="settings-room" tabindex="-1" data-tab="room">room</button>
+        <button id="tab-help" role="tab" aria-selected="false" aria-controls="settings-help" tabindex="-1" data-tab="help">help</button>
+      </div>
       <button id="panel-close" class="ic" aria-label="Close settings" title="Close settings (Esc)">
-        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2L8 7L13 2L14 3L9 8L14 13L13 14L8 9L3 14L2 13L7 8L2 3Z"/></svg>
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3 2L8 7L13 2L14 3L9 8L14 13L13 14L8 9L3 14L2 13L7 8L2 3Z"/></svg>
       </button>
     </div>
     <div id="panel-body">
-    <div class="f"><label for="bpm">base tempo</label><input id="bpm" type="range" min="62" max="92" step="1"><span class="val" id="bpmv"></span></div>
-    <div class="f"><label for="vinyl">vinyl</label><input id="vinyl" type="range" min="0" max="1" step="0.01"><span class="val"></span></div>
-    <div class="f"><label for="purr">cats</label><input id="purr" type="range" min="0" max="1" step="0.01"><span class="val"></span></div>
-    <div class="f"><label for="beat">groove</label><input id="beat" type="range" min="0" max="1" step="0.01" title="How much the room moves with the beat"><span class="val"></span></div>
-    <div class="f"><span>sky</span><div class="seg" id="sky" title="auto follows the clock: dusk from 5 to 6 am, sunrise from 6 to 8 am, day from 8 am to 5 pm, sunset from 5 to 7 pm, dusk from 7 to 9 pm, night from 9 pm to 5 am">
-      <button data-v="auto">auto</button><button data-v="sunrise">sunrise</button><button data-v="day">day</button><button data-v="sunset">sunset</button><button data-v="dusk">dusk</button><button data-v="night">night</button>
-    </div></div>
-    <div class="f"><span>season</span><div class="seg" id="season" title="autumn changes the daytime view and lets leaves fall; auto follows the calendar, autumn from September to November">
-      <button data-v="auto">auto</button><button data-v="summer">summer</button><button data-v="autumn">autumn</button>
-    </div></div>
-    <div class="f"><span>weather</span><div class="seg" id="weather" title="clicking the window steps through these too">
-      <button data-v="clear">clear</button><button data-v="rain">rain</button><button data-v="storm">storm</button><button data-v="snow">snow</button><button data-v="fog">fog</button>
-    </div></div>
-    <div class="f"><span>layers</span><div class="seg" id="layers">
-      <button data-v="keys">keys</button><button data-v="bass">bass</button><button data-v="drums">drums</button><button data-v="melody">melody</button>
-    </div></div>
-    <div class="f"><span>jazz</span><div class="seg" id="licks">
-      <button data-v="licks" title="1-2 short jazz licks per track">jazz licks</button>
-    </div></div>
-    <div class="keys">space play · n next · r rain · t storm · s snow · f fullscreen · l lamp · c candle<br>click a cat to say hi · hold to pet<br>the lamp, candle, mug, window and tape deck answer a click</div>
+      <div id="settings-sound" role="tabpanel" aria-labelledby="tab-sound">
+        <div class="f"><label for="bpm">tempo</label><input id="bpm" type="range" min="62" max="92" step="1" title="Base tempo"><span class="val" id="bpmv"></span></div>
+        <div class="pair">
+          <div class="dial"><label for="vinyl">vinyl <span class="val" id="vinylv" aria-hidden="true"></span></label><input id="vinyl" type="range" min="0" max="1" step="0.01"></div>
+          <div class="dial"><label for="purr">purring <span class="val" id="purrv" aria-hidden="true"></span></label><input id="purr" type="range" min="0" max="1" step="0.01"></div>
+        </div>
+        <div><span class="setting-label" id="layers-label">mix</span><div class="mix"><div class="seg" id="layers" role="group" aria-label="Instruments">
+          <button data-v="keys">keys</button><button data-v="bass">bass</button><button data-v="drums">drums</button><button data-v="melody">melody</button>
+        </div><div class="seg" id="licks"><button data-v="licks" aria-label="Jazz licks" title="1-2 short jazz licks per track">jazz</button></div></div></div>
+      </div>
+      <div id="settings-room" role="tabpanel" aria-labelledby="tab-room" hidden>
+        <div class="f select-row"><label for="sky">sky</label><select id="sky" title="Auto follows the time of day">
+          <option value="auto">auto · local time</option><option value="sunrise">sunrise</option><option value="day">day</option><option value="sunset">sunset</option><option value="dusk">dusk</option><option value="night">night</option>
+        </select></div>
+        <div class="f select-row"><label for="season">season</label><select id="season" title="Auto uses autumn from September to November">
+          <option value="auto">auto · calendar</option><option value="summer">summer</option><option value="autumn">autumn</option>
+        </select></div>
+        <div class="f select-row"><label for="weather">weather</label><select id="weather" title="Clicking the window cycles through these too">
+          <option value="clear">clear</option><option value="rain">rain</option><option value="storm">storm</option><option value="snow">snow</option><option value="fog">fog</option>
+        </select></div>
+        <div class="f"><label for="beat">motion</label><input id="beat" type="range" min="0" max="1" step="0.01" title="How much the room moves with the beat"><span class="val" id="beatv"></span></div>
+        <button id="fs" class="text-button" title="Fullscreen (F)" aria-label="Fullscreen">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h4v2H4v2H2zM10 2h4v4h-2V4h-2zM2 10h2v2h2v2H2zM12 10h2v4h-4v-2h2z"/></svg>fullscreen
+        </button>
+      </div>
+      <div id="settings-help" role="tabpanel" aria-labelledby="tab-help" tabindex="0" hidden>
+        <p class="help-copy">Tap a cat to say hi. Hold to pet.<br>The lamp, candle, mug, window and tape deck respond to a tap, too.</p>
+        <dl class="shortcuts" aria-label="Keyboard shortcuts">
+          <div><dt>space</dt><dd>play / pause</dd></div><div><dt>n</dt><dd>next track</dd></div>
+          <div><dt>r</dt><dd>rain</dd></div><div><dt>s</dt><dd>snow</dd></div>
+          <div><dt>t</dt><dd>storm</dd></div><div><dt>f</dt><dd>fullscreen</dd></div>
+          <div><dt>l</dt><dd>lamp</dd></div><div><dt>c</dt><dd>candle</dd></div>
+        </dl>
+      </div>
     </div>
+  </section>
+  <div id="volume-panel" role="region" aria-label="Volume" hidden>
+    <div class="f"><label for="vol">volume</label><input id="vol" type="range" min="0" max="1" step="0.01"><span class="val" id="volv"></span></div>
+  </div>
+  <div id="player" role="group" aria-label="Music player">
+    <button id="play" class="ic" title="Play / pause (Space)" aria-label="Play"></button>
+    <div class="np"><div id="title">lamplight room</div><div id="meta">live lofi radio</div></div>
+    <button id="next" class="ic" title="Next track (N)" aria-label="Next track">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h2v1h1v1h1v1h1v1h1v2H7v1H6v1H5v1H4v1H2zM9 3h2v1h1v1h1v1h1v1h0v2h-1v1h-1v1h-1v1h-1v1H9z"/></svg>
+    </button>
+    <button id="volume-toggle" class="ic" title="Volume" aria-label="Volume" aria-expanded="false" aria-controls="volume-panel">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 6h3V5h1V4h1V3h2v10H7v-1H6v-1H5v-1H2zM11 5h1v1h1v4h-1v1h-1V9h1V7h-1zM13 2h1v1h1v2h1v6h-1v2h-1v1h-1v-2h1v-2h1V6h-1V4h-1z"/></svg>
+    </button>
+    <button id="gear" class="ic" title="Settings" aria-label="Settings" aria-expanded="false" aria-controls="panel">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h12v1H2zM4 2h2v3H4zM2 8h12v1H2zM10 7h2v3h-2zM2 12h12v1H2zM6 11h2v3H6z"/></svg>
+    </button>
   </div>
 </div>
 
@@ -1457,21 +1468,25 @@ const ICON_PLAY = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2h2v
 const ICON_PAUSE = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2h3v12H3zM10 2h3v12h-3z"/></svg>';
 function announce(s) {
   $('title').textContent = s.title;
-  $('meta').textContent = `${s.key.n} ${MODES[s.mode].label} · ${songBpm(s)} bpm${s.half ? ' half-time' : ''} · ${HARM[s.harm].label} + ${LEAD[s.lead].label} · ${s.ch.label} · track ${String(s.no).padStart(2, '0')}`;
+  $('title').title = `${s.title} · ${s.key.n} ${MODES[s.mode].label} · ${songBpm(s)} bpm${s.half ? ' half-time' : ''} · ${HARM[s.harm].label} + ${LEAD[s.lead].label} · ${s.ch.label} · track ${String(s.no).padStart(2, '0')}`;
+  syncTrackStatus(s);
   document.title = `${s.title} · LofiSy`;
+}
+function syncTrackStatus(s = song) {
+  $('meta').textContent = s ? `${playing ? 'playing' : 'paused'} · ${songBpm(s)} bpm` : 'live lofi radio';
 }
 function syncUI() {
   $('play').innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
   $('play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
-  $('rain').setAttribute('aria-pressed', ST.rain);
-  $('snow').setAttribute('aria-pressed', ST.snow);
+  syncTrackStatus();
   $('vol').value = ST.vol; $('bpm').value = ST.bpm; $('bpmv').textContent = ST.bpm; $('vinyl').value = ST.vinyl;
-  $('vinyl').nextElementSibling.textContent = Math.round(ST.vinyl * 100);
-  $('purr').value = ST.purr; $('purr').nextElementSibling.textContent = Math.round(ST.purr * 100);
-  $('beat').value = ST.beat; $('beat').nextElementSibling.textContent = Math.round(ST.beat * 100);
-  for (const b of $('sky').children) b.setAttribute('aria-pressed', b.dataset.v === ST.sky);
-  for (const b of $('weather').children) b.setAttribute('aria-pressed', b.dataset.v === weatherNow());
-  for (const b of $('season').children) b.setAttribute('aria-pressed', b.dataset.v === ST.season);
+  $('volv').textContent = Math.round(ST.vol * 100);
+  $('vinylv').textContent = Math.round(ST.vinyl * 100);
+  $('purr').value = ST.purr; $('purrv').textContent = Math.round(ST.purr * 100);
+  $('beat').value = ST.beat; $('beatv').textContent = Math.round(ST.beat * 100);
+  $('sky').value = ST.sky;
+  $('weather').value = weatherNow();
+  $('season').value = ST.season;
   for (const b of $('layers').children) b.setAttribute('aria-pressed', !!ST.layers[b.dataset.v]);
   $('licks').firstElementChild.setAttribute('aria-pressed', !!ST.licks);
 }
@@ -1480,6 +1495,9 @@ async function togglePlay() {
   if (playing) { await AC.suspend(); playing = false; }
   else { await AC.resume(); playing = true; tick(); }
   $('bigplay').classList.add('gone');
+  if (document.activeElement === $('bigplay')) $('play').focus({ preventScroll: true });
+  $('bigplay').tabIndex = -1;
+  $('bigplay').setAttribute('aria-hidden', 'true');
   syncUI(); poke();
 }
 // weather: clear, rain, snow or fog, one at a time. The view outside follows, and the rain sound plays only in rain.
@@ -1494,7 +1512,7 @@ function setWeather(w) {
 function setRain(on) { setWeather(on ? 'rain' : 'clear'); }
 function setSnow(on) { setWeather(on ? 'snow' : 'clear'); }
 function nextTrack() { if (!AC) { togglePlay(); return; } skipFlag = true; }
-function setVol(v) { ST.vol = v; if (AC) master.gain.setTargetAtTime(v, AC.currentTime, 0.05); save(); }
+function setVol(v) { ST.vol = v; $('volv').textContent = Math.round(v * 100); if (AC) master.gain.setTargetAtTime(v, AC.currentTime, 0.05); save(); }
 // lamp or candle switched: rebuild everything their light touches and fade the room over in `fade` seconds
 function relight(fade) {
   save(); roomPrev = roomCv; roomCv = buildRoom(); roomFade = 0; roomFadeT = fade;
@@ -1519,27 +1537,65 @@ function fullscreen() { if (!document.fullscreenElement) document.documentElemen
 $('bigplay').onclick = togglePlay;
 $('play').onclick = togglePlay;
 $('next').onclick = nextTrack;
-$('rain').onclick = () => setRain(!ST.rain);
-$('snow').onclick = () => setSnow(!ST.snow);
 $('fs').onclick = fullscreen;
-function setSettings(open) {
+let settingsTab = 'sound';
+function setSettingsTab(name, focus = false) {
+  settingsTab = name;
+  for (const tab of $('settings-tabs').children) {
+    const selected = tab.dataset.tab === name;
+    tab.setAttribute('aria-selected', selected);
+    tab.tabIndex = selected ? 0 : -1;
+    $(tab.getAttribute('aria-controls')).hidden = !selected;
+  }
+  $('panel-body').scrollTop = 0;
+  if (focus) $('tab-' + name).focus({ preventScroll: true });
+}
+function setSettings(open, restoreFocus = true) {
   const wasOpen = !$('panel').hidden;
+  if (open) setVolumePanel(false, false);
   $('panel').hidden = !open;
   $('hud').classList.toggle('settings-open', open);
   $('gear').setAttribute('aria-expanded', open);
-  if (open || wasOpen) $(open ? 'panel-close' : 'gear').focus({ preventScroll: true });
+  if (open) $('tab-' + settingsTab).focus({ preventScroll: true });
+  else if (wasOpen && restoreFocus) $('gear').focus({ preventScroll: true });
   poke();
 }
+function setVolumePanel(open, restoreFocus = true) {
+  const wasOpen = !$('volume-panel').hidden;
+  if (open) setSettings(false, false);
+  $('volume-panel').hidden = !open;
+  $('hud').classList.toggle('volume-open', open);
+  $('volume-toggle').setAttribute('aria-expanded', open);
+  if (open) $('vol').focus({ preventScroll: true });
+  else if (wasOpen && restoreFocus) $('volume-toggle').focus({ preventScroll: true });
+  poke();
+}
+$('settings-tabs').onclick = e => { if (e.target.dataset.tab) setSettingsTab(e.target.dataset.tab); };
+$('settings-tabs').onkeydown = e => {
+  const tabs = [...$('settings-tabs').children], index = tabs.indexOf(e.target);
+  let next;
+  if (e.key === 'ArrowRight') next = (index + 1) % tabs.length;
+  else if (e.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = tabs.length - 1;
+  else return;
+  e.preventDefault();
+  setSettingsTab(tabs[next].dataset.tab, true);
+};
 $('gear').onclick = () => setSettings($('panel').hidden);
 $('panel-close').onclick = () => setSettings(false);
+$('volume-toggle').onclick = () => setVolumePanel($('volume-panel').hidden);
+addEventListener('pointerdown', e => {
+  if (!$('hud').contains(e.target)) { setSettings(false, false); setVolumePanel(false, false); }
+});
 $('vol').oninput = e => setVol(+e.target.value);
 $('bpm').oninput = e => { ST.bpm = +e.target.value; $('bpmv').textContent = ST.bpm; if (AC) dly.delayTime.setTargetAtTime(60 / songBpm(song) * 0.75, AC.currentTime, 0.2); if (song) announce(song); save(); };
-$('purr').oninput = e => { ST.purr = +e.target.value; e.target.nextElementSibling.textContent = Math.round(ST.purr * 100); if (purrBus) purrBus.gain.setTargetAtTime(ST.purr, AC.currentTime, 0.05); save(); };
-$('beat').oninput = e => { ST.beat = +e.target.value; e.target.nextElementSibling.textContent = Math.round(ST.beat * 100); save(); };
-$('vinyl').oninput = e => { ST.vinyl = +e.target.value; e.target.nextElementSibling.textContent = Math.round(ST.vinyl * 100); if (AC) vinylG.gain.setTargetAtTime(ST.vinyl * 0.7, AC.currentTime, 0.05); save(); };
-$('sky').onclick = e => { const v = e.target.dataset.v; if (!v) return; ST.sky = v; save(); setSky(viewFor()); syncUI(); };
-$('weather').onclick = e => { const v = e.target.dataset.v; if (v) setWeather(v); };
-$('season').onclick = e => { const v = e.target.dataset.v; if (!v) return; ST.season = v; save(); setSky(viewFor()); syncUI(); };
+$('purr').oninput = e => { ST.purr = +e.target.value; $('purrv').textContent = Math.round(ST.purr * 100); if (purrBus) purrBus.gain.setTargetAtTime(ST.purr, AC.currentTime, 0.05); save(); };
+$('beat').oninput = e => { ST.beat = +e.target.value; $('beatv').textContent = Math.round(ST.beat * 100); save(); };
+$('vinyl').oninput = e => { ST.vinyl = +e.target.value; $('vinylv').textContent = Math.round(ST.vinyl * 100); if (AC) vinylG.gain.setTargetAtTime(ST.vinyl * 0.7, AC.currentTime, 0.05); save(); };
+$('sky').onchange = e => { ST.sky = e.target.value; save(); setSky(viewFor()); syncUI(); };
+$('weather').onchange = e => setWeather(e.target.value);
+$('season').onchange = e => { ST.season = e.target.value; save(); setSky(viewFor()); syncUI(); };
 $('layers').onclick = e => {
   const v = e.target.dataset.v; if (!v) return;
   ST.layers[v] = !ST.layers[v]; save();
@@ -1552,10 +1608,10 @@ $('licks').onclick = () => {
   syncUI();
 };
 addEventListener('keydown', e => {
-  // Escape works from sliders too; focused buttons keep native Space activation.
-  if (e.code === 'Escape') { setSettings(false); return; }
+  // Keep shortcuts out of native form controls; Escape always closes the open panel.
+  if (e.code === 'Escape') { if (!$('volume-panel').hidden) setVolumePanel(false); else setSettings(false); return; }
   if (e.code === 'Space' && e.target.tagName === 'BUTTON') return;
-  if (e.target.tagName === 'INPUT' && e.code !== 'Space') return;
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
   if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
   else if (e.code === 'KeyN') nextTrack();
   else if (e.code === 'KeyR') setRain(!ST.rain);
@@ -1567,7 +1623,7 @@ addEventListener('keydown', e => {
   poke();
 });
 let idleT = 0;
-function poke() { document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => { if (playing && $('panel').hidden && !$('hud').matches(':hover, :focus-within')) document.body.classList.add('idle'); }, 3500); }
+function poke() { document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => { if (playing && $('panel').hidden && $('volume-panel').hidden && !$('hud').matches(':hover, :focus-within')) document.body.classList.add('idle'); }, 3500); }
 addEventListener('pointermove', poke); addEventListener('pointerdown', poke);
 
 /* =====================================================================
