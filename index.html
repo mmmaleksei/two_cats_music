@@ -35,15 +35,6 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;paddin
 button:focus-visible,input:focus-visible,select:focus-visible,[role=tabpanel]:focus-visible,#track-body:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 [hidden]{display:none!important}
 
-#bigplay{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
-  display:flex;align-items:center;gap:12px;padding:12px 22px 12px 18px;font-size:30px;letter-spacing:1px;
-  background:var(--panel);border:2px solid var(--panel-edge);box-shadow:6px 6px 0 var(--shadow);
-  transition:opacity .6s, transform .6s}
-#bigplay svg{width:26px;height:26px}
-#bigplay:hover{color:var(--accent)}
-#bigplay.gone{opacity:0;pointer-events:none;transform:translate(-50%,-46%)}
-body:has(#hud.settings-open,#hud.volume-open,#hud.track-open) #bigplay{visibility:hidden}
-
 #hud{position:fixed;left:var(--hud-left);bottom:var(--hud-bottom);width:420px;
   max-width:calc(100vw - var(--hud-left) - var(--hud-right));
   max-height:calc(100vh - var(--hud-top) - var(--hud-bottom));
@@ -51,7 +42,12 @@ body:has(#hud.settings-open,#hud.volume-open,#hud.track-open) #bigplay{visibilit
   display:flex;flex-direction:column;gap:8px;transition:opacity .8s}
 #player,#panel,#volume-panel,#track-panel{background:var(--panel);border:2px solid var(--panel-edge);box-shadow:5px 5px 0 var(--shadow)}
 #panel,#track-panel{--dim:#c2ad94;background:rgba(17,12,24,.96)}
-#player{display:grid;grid-template-columns:44px minmax(0,1fr) repeat(3,44px);align-items:center;gap:4px;padding:8px;flex-shrink:0}
+#player{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr) repeat(3,44px);align-items:center;gap:4px;padding:8px;flex-shrink:0}
+#pet-hint{position:absolute;left:0;bottom:calc(100% + 10px);width:max-content;max-width:100%;margin:0;
+  padding:5px 8px;font-size:17px;line-height:1.1;color:var(--ink);background:var(--panel);
+  border:1px solid var(--panel-edge);box-shadow:3px 3px 0 var(--shadow);pointer-events:none;transition:opacity .5s}
+#pet-hint.dismissed{opacity:0}
+#hud:is(.settings-open,.volume-open,.track-open) #pet-hint{display:none}
 body.idle #hud{opacity:0}
 body.idle #hud:focus-within{opacity:1}
 body.idle{cursor:none}
@@ -126,16 +122,14 @@ select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border
 @media (max-width:480px){
   #hud{width:calc(100vw - var(--hud-left) - var(--hud-right))}
 }
+@media (prefers-reduced-motion:reduce){
+  #pet-hint{transition:none}
+}
 </style>
 </head>
 <body>
 <canvas id="screen"></canvas>
 <div id="vignette"></div>
-
-<button id="bigplay" aria-label="Play">
-  <svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2h2v1h1v1h1v1h1v1h1v1h1v2h-1v1h-1v1H9v1H8v1H7v1H6v1H4z"/></svg>
-  <span>play</span>
-</button>
 
 <div id="hud">
   <section id="panel" aria-label="Settings" hidden>
@@ -212,6 +206,7 @@ select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border
     </div>
   </section>
   <div id="player" role="group" aria-label="Music player">
+    <p id="pet-hint">tap a cat · hold to pet</p>
     <button id="play" class="ic" title="Play / pause (Space)" aria-label="Play"></button>
     <button id="track-toggle" class="np" aria-label="Track details: lamplight room" aria-expanded="false" aria-controls="track-panel" title="Track details">
       <span class="track-line"><span id="title">lamplight room</span><svg class="track-chevron" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true"><path d="M3 2h2v1h1v1h1v2H5V5H3v1H1V4h1V3h1z"/></svg></span>
@@ -1542,14 +1537,17 @@ function syncUI() {
   for (const b of $('layers').children) b.setAttribute('aria-pressed', !!ST.layers[b.dataset.v]);
   $('licks').firstElementChild.setAttribute('aria-pressed', !!ST.licks);
 }
+let petHintTimer = null;
+function dismissPetHint() {
+  clearTimeout(petHintTimer);
+  $('pet-hint').classList.add('dismissed');
+  $('pet-hint').setAttribute('aria-hidden', 'true');
+}
 async function togglePlay() {
   if (!AC) { initAudio(); nextBarT = AC.currentTime + 0.12; startTicker(); }
   if (playing) { await AC.suspend(); playing = false; }
   else { await AC.resume(); playing = true; tick(); }
-  $('bigplay').classList.add('gone');
-  if (document.activeElement === $('bigplay')) $('play').focus({ preventScroll: true });
-  $('bigplay').tabIndex = -1;
-  $('bigplay').setAttribute('aria-hidden', 'true');
+  if (playing && petHintTimer === null && !$('pet-hint').classList.contains('dismissed')) petHintTimer = setTimeout(dismissPetHint, 6000);
   syncUI(); poke();
 }
 // weather: clear, rain, snow or fog, one at a time. The view outside follows, and the rain sound plays only in rain.
@@ -1586,7 +1584,6 @@ const ACT = {
 };
 function fullscreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {}); else document.exitFullscreen?.(); }
 
-$('bigplay').onclick = togglePlay;
 $('play').onclick = togglePlay;
 $('next').onclick = nextTrack;
 $('fs').onclick = fullscreen;
@@ -1651,6 +1648,7 @@ $('track-toggle').onclick = () => setTrackPanel($('track-panel').hidden);
 $('track-close').onclick = () => setTrackPanel(false);
 addEventListener('pointerdown', e => {
   if (!$('hud').contains(e.target)) { setSettings(false, false); setVolumePanel(false, false); setTrackPanel(false, false); }
+  if (e.target === $('screen') && ['devon', 'sph'].includes(hitAt(e.clientX, e.clientY))) dismissPetHint();
 });
 $('vol').oninput = e => setVol(+e.target.value);
 $('bpm').oninput = e => { ST.bpm = +e.target.value; $('bpmv').textContent = ST.bpm; if (AC) dly.delayTime.setTargetAtTime(60 / songBpm(song) * 0.75, AC.currentTime, 0.2); if (shownTrack) announce(shownTrack); save(); };
