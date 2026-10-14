@@ -1,0 +1,222 @@
+{
+ "canvas": [
+  384,
+  216
+ ],
+ "layers": [
+  {
+   "name": "outside",
+   "at": [
+    108,
+    6
+   ],
+   "skies": {
+    "night": {
+     "file": "outside.png",
+     "disc": [
+      236,
+      34,
+      10
+     ],
+     "stars": true
+    },
+    "sunset": {
+     "file": "outside-sunset.png",
+     "disc": [
+      240,
+      51,
+      7
+     ],
+     "stars": false
+    },
+    "rain": {
+     "file": "outside-rain.png",
+     "disc": null,
+     "stars": false
+    },
+    "dusk": {
+     "file": "outside-dusk.png",
+     "disc": null,
+     "stars": true
+    },
+    "snow": {
+     "file": "outside-snow.png",
+     "disc": null,
+     "stars": false,
+     "glints": "warm"
+    },
+    "fog": {
+     "file": "outside-fog.png",
+     "disc": null,
+     "stars": false,
+     "glints": "warm"
+    },
+    "storm": {
+     "file": "outside-storm.png",
+     "disc": null,
+     "stars": false,
+     "glints": "warm"
+    },
+    "storm-flash": {
+     "file": "outside-storm-flash.png",
+     "disc": null,
+     "stars": false,
+     "glints": "warm"
+    },
+    "day": {
+     "file": "outside-day.png",
+     "disc": null,
+     "stars": false,
+     "glints": "cool"
+    },
+    "sunrise": {
+     "file": "outside-sunrise.png",
+     "disc": null,
+     "stars": false,
+     "glints": "warm"
+    },
+    "autumn": {
+     "file": "outside-autumn.png",
+     "disc": null,
+     "stars": false,
+     "glints": "cool"
+    }
+   }
+  },
+  {
+   "name": "room",
+   "file": "room.png",
+   "at": [
+    0,
+    0
+   ],
+   "lights": {
+    "unlit": {
+     "file": "room-unlit.png",
+     "max": 1.0
+    },
+    "unlit-day": {
+     "file": "room-unlit-day.png",
+     "max": 1.15
+    }
+   }
+  }
+ ],
+ "sheet": "cats.png",
+ "sprites": {
+  "devon-head": {
+   "sheet": [
+    0,
+    0,
+    30,
+    28
+   ],
+   "at": [
+    130,
+    49
+   ]
+  },
+  "devon-body": {
+   "sheet": [
+    31,
+    0,
+    54,
+    47
+   ],
+   "at": [
+    111,
+    74
+   ]
+  },
+  "devon-body-in": {
+   "sheet": [
+    86,
+    0,
+    54,
+    48
+   ],
+   "at": [
+    111,
+    73
+   ]
+  },
+  "devon-tail": {
+   "sheet": [
+    141,
+    0,
+    21,
+    26
+   ],
+   "at": [
+    127,
+    118
+   ]
+  },
+  "sph-head": {
+   "sheet": [
+    163,
+    0,
+    41,
+    33
+   ],
+   "at": [
+    196,
+    103
+   ]
+  },
+  "sph-body": {
+   "sheet": [
+    205,
+    0,
+    52,
+    54
+   ],
+   "at": [
+    193,
+    133
+   ]
+  },
+  "sph-body-in": {
+   "sheet": [
+    258,
+    0,
+    52,
+    55
+   ],
+   "at": [
+    193,
+    132
+   ]
+  },
+  "sph-head-flick-l": {
+   "sheet": [
+    311,
+    0,
+    41,
+    33
+   ],
+   "at": [
+    196,
+    103
+   ]
+  },
+  "sph-head-flick-r": {
+   "sheet": [
+    353,
+    0,
+    41,
+    33
+   ],
+   "at": [
+    196,
+    103
+   ]
+  }
+ },
+ "split_rows": {
+  "devon": 77,
+  "sph": 136
+ },
+ "note": "Draw back to front: outside, room (transparent glass), cat bodies and the Devon's tail, heads. Positions are the rest pose in scene pixels (top-left). Draw room, bodies, tail, heads. Bodies hold 3 hidden neck rows under each head. '-in' bodies are the in-breath frame; flick heads drop one ear tip by 2 px.",
+ "version": "6756e31527"
+}

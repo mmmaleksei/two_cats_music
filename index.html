@@ -90,6 +90,9 @@ input[type=range]:hover::-webkit-slider-thumb{background:var(--accent)}
     <button id="rain" class="ic" title="Rain (R)" aria-label="Rain" aria-pressed="false">
       <svg viewBox="0 0 16 16" fill="currentColor"><path d="M6 2h4v1h1v1h2v1h1v3h-1v1H3V8H2V6h1V5h1V4h1V3h1zM4 11h1v1H4zM3 13h1v1H3zM8 11h1v1H8zM7 13h1v1H7zM12 11h1v1h-1zM11 13h1v1h-1z"/></svg>
     </button>
+    <button id="snow" class="ic" title="Snow (S)" aria-label="Snow" aria-pressed="false">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2h1v13H8zM2 8h13v1H2zM4 4h1v1h-1zM5 5h1v1h-1zM6 6h1v1h-1zM7 7h1v1h-1zM9 9h1v1h-1zM10 10h1v1h-1zM11 11h1v1h-1zM12 12h1v1h-1zM12 4h1v1h-1zM11 5h1v1h-1zM10 6h1v1h-1zM9 7h1v1h-1zM7 9h1v1h-1zM6 10h1v1h-1zM5 11h1v1h-1zM4 12h1v1h-1zM7 3h1v1h-1zM9 3h1v1h-1zM7 13h1v1h-1zM9 13h1v1h-1zM3 7h1v1h-1zM3 9h1v1h-1zM13 7h1v1h-1zM13 9h1v1h-1z"/></svg>
+    </button>
     <button id="gear" class="ic" title="Settings" aria-label="Settings" aria-expanded="false">
       <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h12v1H2zM4 2h2v3H4zM2 8h12v1H2zM10 7h2v3h-2zM2 12h12v1H2zM6 11h2v3H6z"/></svg>
     </button>
@@ -102,13 +105,19 @@ input[type=range]:hover::-webkit-slider-thumb{background:var(--accent)}
     <div class="f"><span>vinyl</span><input id="vinyl" type="range" min="0" max="1" step="0.01"><span class="val"></span></div>
     <div class="f"><span>cats</span><input id="purr" type="range" min="0" max="1" step="0.01"><span class="val"></span></div>
     <div class="f"><span>groove</span><input id="beat" type="range" min="0" max="1" step="0.01" title="How much the room moves with the beat"><span class="val"></span></div>
-    <div class="f"><span>sky</span><div class="seg" id="sky">
-      <button data-v="auto">auto</button><button data-v="sunset">sunset</button><button data-v="dusk">dusk</button><button data-v="night">night</button>
+    <div class="f"><span>sky</span><div class="seg" id="sky" title="auto follows the clock: dusk from 5 to 6 am, sunrise from 6 to 8 am, day from 8 am to 5 pm, sunset from 5 to 7 pm, dusk from 7 to 9 pm, night from 9 pm to 5 am">
+      <button data-v="auto">auto</button><button data-v="sunrise">sunrise</button><button data-v="day">day</button><button data-v="sunset">sunset</button><button data-v="dusk">dusk</button><button data-v="night">night</button>
+    </div></div>
+    <div class="f"><span>season</span><div class="seg" id="season" title="autumn changes the daytime view and lets leaves fall; auto follows the calendar, autumn from September to November">
+      <button data-v="auto">auto</button><button data-v="summer">summer</button><button data-v="autumn">autumn</button>
+    </div></div>
+    <div class="f"><span>weather</span><div class="seg" id="weather" title="clicking the window steps through these too">
+      <button data-v="clear">clear</button><button data-v="rain">rain</button><button data-v="storm">storm</button><button data-v="snow">snow</button><button data-v="fog">fog</button>
     </div></div>
     <div class="f"><span>layers</span><div class="seg" id="layers">
       <button data-v="keys">keys</button><button data-v="bass">bass</button><button data-v="drums">drums</button><button data-v="melody">melody</button>
     </div></div>
-    <div class="keys">space play · n next · r rain · f fullscreen · l lamp · c candle<br>click a cat to say hi · hold to pet<br>the lamp, candle, mug, window and boombox answer a click</div>
+    <div class="keys">space play · n next · r rain · t storm · s snow · f fullscreen · l lamp · c candle<br>click a cat to say hi · hold to pet<br>the lamp, candle, mug, window and tape deck answer a click</div>
   </div>
 </div>
 
@@ -118,7 +127,7 @@ input[type=range]:hover::-webkit-slider-thumb{background:var(--accent)}
    Settings
    ===================================================================== */
 const ST = Object.assign({
-  vol: 0.75, bpm: 74, vinyl: 0.5, purr: 0.6, rain: false, sky: 'auto',
+  vol: 0.75, bpm: 74, vinyl: 0.5, purr: 0.6, rain: false, storm: false, snow: false, fog: false, sky: 'auto', season: 'auto',
   // how much the room moves with the beat; starts at zero for people who ask for reduced motion
   beat: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 0.7,
   lamp: true, candle: true,
@@ -129,30 +138,12 @@ function save() { try { localStorage.setItem('lofisy', JSON.stringify(ST)); } ca
 /* =====================================================================
    Pixel helpers
    ===================================================================== */
-const W = 320, H = 180, HZ = 80;
+const W = 384, H = 216;
 const hex = h => { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
 const pack = (c, a = 255) => ((a << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
-const mix = (a, b, t) => [0, 1, 2].map(i => Math.round(a[i] + (b[i] - a[i]) * t));
 const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
-function dpick(ramp, v, x, y) {
-  const n = ramp.length - 1;
-  if (v <= 0) return ramp[0];
-  if (v >= n) return ramp[n];
-  const i = Math.floor(v);
-  return (v - i) > BAYER[(y & 3) * 4 + (x & 3)] ? ramp[i + 1] : ramp[i];
-}
-function rng(seed) {
-  return function () {
-    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-const h2 = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
-const packRamp = r => r.map(c => pack(typeof c === 'string' ? hex(c) : c));
 
 class Buf {
   constructor(w, h) {
@@ -164,653 +155,6 @@ class Buf {
   }
   set(x, y, c) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= this.w || y >= this.h) return; this.d[y * this.w + x] = c; }
   flush() { this.cx.putImageData(this.img, 0, 0); return this.cv; }
-}
-
-/* Shape: draw with materials + light levels, then auto-shade + outline */
-class Shape {
-  constructor(w, h) { this.w = w; this.h = h; this.m = new Int8Array(w * h).fill(-1); this.l = new Float32Array(w * h); this.fx = []; }
-  put(x, y, m, l) { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= this.w || y >= this.h) return; const i = y * this.w + x; this.m[i] = m; this.l[i] = l; }
-  has(x, y) { return !(x < 0 || y < 0 || x >= this.w || y >= this.h) && this.m[y * this.w + x] >= 0; }
-  adj(x, y, d) { if (this.has(x, y)) this.l[y * this.w + x] += d; }
-  rect(x, y, w, h, m, l) { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) this.put(i, j, m, typeof l === 'function' ? l(i, j) : l); }
-  ell(cx, cy, rx, ry, m, l, rot = 0) {
-    const c = Math.cos(rot), s = Math.sin(rot), R = Math.ceil(Math.max(rx, ry)) + 1;
-    for (let y = Math.floor(cy - R); y <= cy + R; y++) for (let x = Math.floor(cx - R); x <= cx + R; x++) {
-      const dx = x - cx, dy = y - cy, u = (dx * c + dy * s) / rx, v = (-dx * s + dy * c) / ry;
-      if (u * u + v * v <= 1) this.put(x, y, m, typeof l === 'function' ? l(x, y) : l);
-    }
-  }
-  poly(pts, m, l) {
-    let y0 = Infinity, y1 = -Infinity; for (const p of pts) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
-    for (let y = Math.floor(y0); y <= Math.ceil(y1); y++) {
-      const yc = y + 0.5, xs = [];
-      for (let i = 0; i < pts.length; i++) {
-        const a = pts[i], b = pts[(i + 1) % pts.length];
-        if ((a[1] <= yc && b[1] > yc) || (b[1] <= yc && a[1] > yc)) xs.push(a[0] + (yc - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
-      }
-      xs.sort((p, q) => p - q);
-      for (let k = 0; k + 1 < xs.length; k += 2) for (let x = Math.round(xs[k]); x < Math.round(xs[k + 1]); x++) this.put(x, y, m, typeof l === 'function' ? l(x, y) : l);
-    }
-  }
-  line(x0, y0, x1, y1, m, l, th = 1) {
-    const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))) * 2 + 1;
-    for (let i = 0; i <= n; i++) {
-      const t = i / n, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
-      if (th <= 1) this.put(x, y, m, l); else this.rect(Math.round(x - (th - 1) / 2), Math.round(y - (th - 1) / 2), th, th, m, l);
-    }
-  }
-  texture(fn) { for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) { const i = y * this.w + x; if (this.m[i] >= 0) this.l[i] += fn(x, y, this.m[i]); } }
-  dot(x, y, c) { this.fx.push([x, y, c]); }
-  render(ramps, o = {}) {
-    const light = o.light ?? -1, off = o.off ?? 0, rim = o.rim ?? 1, sh = o.shadow ?? 0.9;
-    const b = new Buf(this.w, this.h), oc = pack(hex(o.outline || '#120c18'));
-    const R = ramps.map(packRamp);
-    for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) {
-      const i = y * this.w + x, m = this.m[i];
-      if (m < 0) {
-        if (o.outline !== null && (this.has(x - 1, y) || this.has(x + 1, y) || this.has(x, y - 1) || this.has(x, y + 1)) && !(o.openBelow != null && y >= o.openBelow)) b.set(x, y, oc);
-        continue;
-      }
-      let l = this.l[i] + off;
-      if (light !== 0) {
-        if (!this.has(x + light, y)) l += rim * 0.9;
-        if (!this.has(x - light, y)) l -= sh; else if (!this.has(x - 2 * light, y)) l -= sh * 0.45;
-      }
-      if (!this.has(x, y - 1)) l += rim * 0.55;
-      if (!this.has(x, y + 1)) l -= 0.55;
-      b.set(x, y, dpick(R[m], l, x, y));
-    }
-    for (const [x, y, c] of this.fx) b.set(x, y, pack(hex(c)));
-    return b.flush();
-  }
-}
-
-/* =====================================================================
-   Palettes
-   ===================================================================== */
-const RP = {
-  wall: ['#140f1d', '#1c1428', '#261a33', '#33223d', '#4a2f45', '#6a4049', '#8e5a4f', '#b67a5a', '#d8a06a'],
-  wood: ['#1a1014', '#2a1a1a', '#3d2420', '#55322a', '#6e4433', '#8c5a3e', '#ad7449', '#cf9659', '#e8b878'],
-  under: ['#07050b', '#0d0912', '#140f1b', '#1c1525'],
-  curtain: ['#11171d', '#182228', '#203033', '#2b403f', '#3a564f', '#4f6f60', '#6a8c74', '#8aa88a'],
-  brass: ['#2e2216', '#56401f', '#856028', '#b48a3a', '#dcb45a', '#f6dc8e'],
-  shade: ['#5a2a1e', '#8a3e26', '#b85a30', '#e0823c', '#f5aa52', '#ffd27a'],
-  paper: ['#5a4a46', '#8a7668', '#b9a48e', '#dfcaae', '#f4e4c6', '#fff4dc'],
-  sunp: ['#7a3424', '#b0503a', '#de7a48', '#f4a35a', '#ffcf86'],
-  mtnp: ['#1a2434', '#26384a', '#36505e', '#4c6a72', '#668a86'],
-  maroon: ['#24101a', '#421b26', '#652a33', '#8a3c3e', '#ad5a4e', '#c87a62'],
-  teal: ['#0d1f22', '#183335', '#224c4a', '#30665e', '#468476', '#62a08a'],
-  mustard: ['#33240f', '#574016', '#805e22', '#a88232', '#cca44e', '#e6c470'],
-  green: ['#0d1a12', '#16291b', '#213f27', '#2f5833', '#437342', '#5e9052', '#80ac68'],
-  stem: ['#0e1a10', '#1a2c18', '#284220', '#3a5a2a'],
-  terra: ['#341810', '#5a2a1a', '#843e26', '#a85432', '#c67044', '#e0905c'],
-  cream: ['#3e302c', '#6e5a50', '#a08a78', '#c8b096', '#e6d0b0', '#f8e8cc'],
-  coffee: ['#140a08', '#24140e', '#3a2216', '#563420'],
-  graphite: ['#16121a', '#2a2430', '#423a48', '#605668', '#827888'],
-  boom: ['#121419', '#1c2028', '#282e38', '#384250', '#4c5866', '#64727e', '#808c96'],
-  grille: ['#08080b', '#101015', '#18181f', '#22222b', '#2e2e39'],
-  glass: ['#060609', '#0c0c12', '#14141d', '#1e1e2a'],
-  orange: ['#4a2214', '#86401f', '#c4662e', '#ec9448', '#ffc272'],
-  devon: ['#2c2640', '#575170', '#8f88a2', '#c4bcc6', '#e8ddd4', '#fff6e8', '#ffffff'],
-  pinkEar: ['#4a2e3a', '#7a4a58', '#a86a78', '#cc8e98', '#e6b2b4'],
-  sphynx: ['#211a1d', '#3a2f33', '#56474b', '#736166', '#8f7b7e', '#a99494', '#c0aba5'],
-  sphMask: ['#0e0a0c', '#191214', '#251b1e', '#33262a', '#43333a'],
-  sphEar: ['#22181b', '#36282c', '#4c3a3e', '#64504f', '#7c6662']
-};
-
-const SKY_KEYS = [
-  { sky: ['#2b2456', '#4a3170', '#7c3f7d', '#c2577c', '#ee8b6b', '#f9c57c'],
-    far: ['#4a3a6e', '#6e4a80', '#9a5c86', '#c97f8f'], near: ['#2a2048', '#3a2a58', '#4d3666', '#64447a'],
-    forest: ['#120d20', '#1b142e', '#2a1f3d'], snow: ['#f0bca8', '#ffe2c8'], cloud: ['#6a3f72', '#a4587c', '#de7f7a', '#f6b38a'] },
-  { sky: ['#121736', '#1c2250', '#302e68', '#4f3c78', '#7e4f80', '#a8687c'],
-    far: ['#2a2a55', '#3a3466', '#4c3e72', '#64507e'], near: ['#18183a', '#201f46', '#2a2650', '#36305c'],
-    forest: ['#0a0a18', '#100e20', '#18152c'], snow: ['#8a86b0', '#aaa4c6'], cloud: ['#232750', '#363664', '#52467a', '#765a86'] },
-  { sky: ['#060a1a', '#0a112b', '#0f193b', '#16224a', '#1e2c58', '#283866'],
-    far: ['#141c3c', '#1a2448', '#222e56', '#2c3a64'], near: ['#0c1128', '#111833', '#161f3e', '#1d284a'],
-    forest: ['#05070f', '#080b17', '#0c1020'], snow: ['#7d8bb5', '#a9b6d8'], cloud: ['#141b38', '#1d264c', '#29345e', '#384470'] }
-];
-function skyT() {
-  if (ST.sky === 'sunset') return 0;
-  if (ST.sky === 'dusk') return 0.5;
-  if (ST.sky === 'night') return 1;
-  const d = new Date(), h = d.getHours() + d.getMinutes() / 60;
-  if (h >= 21 || h < 5) return 1;
-  if (h >= 19 || h < 7) return 0.5;
-  return 0;
-}
-function palette(t, rain) {
-  const [A, B, u] = t <= 0.5 ? [SKY_KEYS[0], SKY_KEYS[1], t / 0.5] : [SKY_KEYS[1], SKY_KEYS[2], (t - 0.5) / 0.5];
-  const P = {};
-  for (const k of ['sky', 'far', 'near', 'forest', 'snow', 'cloud']) {
-    P[k] = A[k].map((c, i) => mix(hex(c), hex(B[k][i]), u));
-    if (rain) P[k] = P[k].map(c => {
-      const l = 0.3 * c[0] + 0.55 * c[1] + 0.15 * c[2];
-      return mix(c, [l * 0.86, l * 0.93, l * 1.1], 0.7).map(v => Math.round(clamp(v * 0.72, 0, 255)));
-    });
-  }
-  const deep = P.sky[0].map(v => v * 0.6);
-  P.dark = {};
-  for (const k of ['sky', 'far', 'near', 'forest', 'snow']) P.dark[k] = packRamp(P[k].map(c => mix(c, deep, 0.38)));
-  for (const k of ['sky', 'far', 'near', 'forest', 'snow', 'cloud']) P[k + 'P'] = packRamp(P[k]);
-  return P;
-}
-
-/* =====================================================================
-   Terrain
-   ===================================================================== */
-const forest = new Uint8Array(W * H), farTop = new Int16Array(W + 2), nearTop = new Int16Array(W + 2);
-const farY = x => HZ - 12 - (22 * Math.pow(1 - Math.abs(Math.sin(0.024 * x + 0.4)), 1.4) + 9 * Math.pow(1 - Math.abs(Math.sin(0.061 * x + 1.3)), 1.2) + 1.2 * Math.sin(0.45 * x));
-const nearY = x => HZ - 3 - (13 * Math.pow(1 - Math.abs(Math.sin(0.04 * x + 2.1)), 1.2) + 5 * (1 - Math.abs(Math.sin(0.11 * x + 0.3))) + 0.8 * Math.sin(0.7 * x));
-const shoreY = x => 102 + Math.round(1.2 * Math.sin(x * 0.23) + 1.3 * Math.sin(x * 0.07 + 1));
-// forest mask: 1 = shaded side, 2 = lit side
-function mark(x, y, lit) { if (x >= 0 && x < W && y >= 0) forest[y * W + x] = Math.max(forest[y * W + x], lit ? 2 : 1); }
-function fir(tx, by, h, r) {
-  // tiered spruce: widens steadily, each tier steps back by one pixel, never narrower than the tier above
-  const maxHw = Math.max(2, Math.round(h * 0.3));
-  let prev = 0;
-  for (let i = 0; i < h; i++) {
-    const y = by - h + i;
-    let hw = Math.min(maxHw, Math.floor(i * 0.42 + 0.2));
-    if (i >= 4 && i % 3 === 1) hw = Math.max(prev - 1 + (i > 6 ? 1 : 0), hw - 1, 1);
-    if (i < 3) hw = i === 2 && h > 8 ? 1 : 0;
-    hw = Math.max(hw, i > 2 ? 1 : 0);
-    prev = hw;
-    const jag = r() < 0.3 ? 1 : 0;
-    for (let dx = -hw - (jag && i > 3 ? 1 : 0); dx <= hw; dx++) mark(tx + dx, y, dx > 0);
-  }
-}
-function broadleaf(tx, by, h, r) {
-  // rounded crown made of a few overlapping lumps, sitting on the treeline
-  const rx = Math.max(2.5, h * 0.42), ry = h * 0.5, cy = by - ry;
-  const lumps = [[0, 0, 1], [-rx * 0.45, ry * 0.25, 0.7], [rx * 0.45, ry * 0.2, 0.7], [rx * 0.1, -ry * 0.45, 0.6]];
-  for (const [ox, oy, k] of lumps) {
-    const lrx = rx * k, lry = ry * k;
-    for (let y = Math.floor(cy + oy - lry); y <= cy + oy + lry; y++) for (let x = Math.floor(tx + ox - lrx); x <= tx + ox + lrx; x++) {
-      const u = (x - tx - ox) / lrx, v = (y - cy - oy) / lry;
-      if (u * u + v * v <= 1 + (h2(x, y) - 0.5) * 0.35 && y < by) mark(x, y, x > tx + ox - lrx * 0.1 && y < cy + oy);
-    }
-  }
-}
-(function buildTerrain() {
-  const r = rng(42);
-  for (let x = 0; x < W + 2; x++) { farTop[x] = Math.round(farY(x)); nearTop[x] = Math.round(nearY(x)); }
-  for (let x = 88; x < 244; x += 2 + Math.floor(r() * 2)) {
-    const base = Math.round(nearY(x)), hh = 1 + Math.floor(r() * 2);
-    for (let rr = 0; rr <= hh + 1; rr++) { const hw = Math.floor(rr * 0.8); for (let dx = -hw; dx <= hw; dx++) nearTop[x + dx] = Math.min(nearTop[x + dx], base - hh + rr); }
-  }
-  for (let x = 86; x < 246;) {
-    const cd = Math.min(1, Math.abs(x - 162) / 70);
-    const h = Math.round(5 + r() * 3 + Math.pow(cd, 1.6) * 12 + r() * 4 * cd);
-    if (r() < 0.3 && h < 14) broadleaf(x, HZ, h * 0.8, r); else fir(x, HZ, h, r);
-    x += 2 + Math.floor(r() * 2.5 + (1 - cd) * 3);
-  }
-  for (let x = 0; x < W; x++) { mark(x, HZ - 1, false); mark(x, HZ - 2, false); if (r() < 0.6) mark(x, HZ - 3, false); }
-})();
-const faceOf = (arr, x) => arr[x + 1] > arr[x - 1] ? 1 : arr[x + 1] < arr[x - 1] ? 0 : 0.5;
-function landAt(x, y) {
-  if (x < 1 || x >= W - 1 || y < 0) return null;
-  if (forest[y * W + x]) return ['forest', (forest[y * W + x] === 2 ? 1.45 : 0.85) + (!forest[(y - 1) * W + x] ? 0.5 : 0)];
-  const nt = nearTop[x];
-  if (y >= nt) { let v = 1.3 + faceOf(nearTop, x) * 0.9 - (y - nt) / 16; if (h2(x, y) < 0.18) v -= 0.7; if (y === nt) v += 0.5; return ['near', v]; }
-  const ft = farTop[x];
-  if (y >= ft) {
-    const f = faceOf(farTop, x);
-    if (HZ - ft > 33 && y < ft + 2 + Math.floor(h2(x, 1) * 3)) return ['snow', f > 0.5 ? 1 : 0.25];
-    let v = 1.5 + f * 1.1 - (y - ft) / 20; if (y === ft) v += 0.9;
-    return ['far', v];
-  }
-  return null;
-}
-
-/* =====================================================================
-   Outside layers (sky + land), rebuilt on sky/rain change
-   ===================================================================== */
-const skyBuf = new Buf(W, H), landBuf = new Buf(W, H);
-let OUT = { t: 0, rain: false, P: null, clouds: [], glints: [], flies: [], sun: null, moon: null };
-const stars = (() => { const r = rng(5), s = []; for (let i = 0; i < 80; i++) s.push({ x: 98 + Math.floor(r() * 133), y: 20 + Math.floor(r() * 50), b: 0.35 + r() * 0.65, f: 0.6 + r() * 2.2, p: r() * 7, big: r() < 0.07 }); return s; })();
-
-function buildOutside() {
-  const t = skyT(), rain = ST.rain, P = palette(t, rain);
-  skyBuf.d.fill(0); landBuf.d.fill(0);
-  const sun = (!rain && t < 0.42) ? { x: 150, y: Math.round(68 + t * 34), r: 9 } : null;
-  const moon = (!rain && t > 0.42) ? { x: 206, y: 33, r: 5 } : null;
-  const sunCore = pack(hex('#fff0b8')), sunEdge = pack(hex('#ffc878'));
-  const moonC = pack(hex('#f4ecd2')), moonE = pack(hex('#d9cfb2')), crater = pack(hex('#cbbf9e'));
-  for (let y = 14; y <= HZ + 1; y++) for (let x = 90; x <= 238; x++) {
-    let v = clamp((y - 18) / (HZ - 18), 0, 1) * 5;
-    if (sun) { const d = Math.hypot(x - sun.x, y - sun.y); if (d <= sun.r) { skyBuf.set(x, y, d < sun.r - 3 ? sunCore : sunEdge); continue; } if (d < sun.r + 18) v += Math.pow(1 - (d - sun.r) / 18, 1.5) * 1.9; }
-    if (moon) {
-      const d = Math.hypot(x - moon.x, y - moon.y);
-      if (d <= moon.r + 0.3) { const cr = (x === 205 && y === 31) || (x === 207 && y === 34) || (x === 204 && y === 35) || (x === 208 && y === 31); skyBuf.set(x, y, cr ? crater : d > moon.r - 0.8 ? moonE : moonC); continue; }
-      if (d < moon.r + 11) v += Math.pow(1 - (d - moon.r) / 11, 2) * 1.3;
-    }
-    skyBuf.set(x, y, dpick(P.skyP, v, x, y));
-  }
-  for (let y = 14; y <= 107; y++) for (let x = 90; x <= 238; x++) {
-    const sy = shoreY(x);
-    const cl = Math.floor(x / 3), tuft = h2(cl, 3) < 0.45 ? 1 + Math.floor(h2(cl, 9) * 2) + (h2(x, 5) < 0.2 ? 1 : 0) : (h2(x, 7) < 0.15 ? 1 : 0);
-    if (y >= sy - tuft) { landBuf.set(x, y, P.forestP[0]); continue; }
-    if (y < HZ) { const L = landAt(x, y); if (L) landBuf.set(x, y, dpick(P[L[0] + 'P'], L[1], x, y)); continue; }
-    const k = y - HZ, amp = 0.4 + k * 0.07;
-    const dx = Math.round(Math.sin(y * 1.7) * amp), my = HZ - 1 - k;
-    const L = landAt(x + dx, my);
-    if (L) { landBuf.set(x, y, dpick(P.dark[L[0]], L[1] - 0.45, x, y)); continue; }
-    let v = clamp((my - 18) / (HZ - 18), 0, 1) * 5 - 0.35;
-    if (k % 4 === 1 && h2(x >> 3, y) < 0.5) v += 0.5;
-    landBuf.set(x, y, dpick(P.dark.sky, v, x, y));
-  }
-  skyBuf.flush(); landBuf.flush();
-
-  const r = rng(99 + (rain ? 7 : 0) + Math.round(t * 10));
-  const clouds = [], n = rain ? 10 : 5, warm = t < 0.5;
-  for (let i = 0; i < n; i++) {
-    const w = Math.round(rain ? 30 + r() * 40 : 16 + r() * 28), h = Math.round(rain ? 7 + r() * 6 : 4 + r() * 5);
-    const s = new Shape(w + 2, h + 2);
-    for (let k = 0; k < 6; k++) s.ell(2 + r() * (w - 3), 1 + h * (0.45 + r() * 0.25), w * (0.14 + r() * 0.18), h * (0.4 + r() * 0.3), 0, 0);
-    for (let x = 0; x < w + 2; x++) for (let y = Math.ceil(h * 0.95); y < h + 2; y++) s.m[y * (w + 2) + x] = -1;
-    s.texture((x, y) => warm ? 0.6 + (y / h) * 2.4 : 0.6 + (1 - y / h) * 1.8);
-    clouds.push({ cv: s.render([P.cloud.map(c => '#' + c.map(v => v.toString(16).padStart(2, '0')).join(''))], { outline: null, light: 0, rim: 0.4 }),
-      x: 70 + r() * 170, y: Math.round(rain ? 16 + r() * 34 : 22 + r() * 26), v: rain ? 2 + r() * 2.5 : 0.5 + r() * 1.1, w: w + 2 });
-  }
-  const glints = [];
-  const gx = sun ? sun.x : moon ? moon.x : 0;
-  if (!rain && gx) for (let i = 0; i < 46; i++) {
-    const y = HZ + 1 + Math.floor(Math.pow(r(), 0.8) * 21), spread = 3 + (y - HZ) * 1.3;
-    glints.push({ x: Math.round(gx + (r() - 0.5) * spread * 2), y, len: 1 + Math.floor(r() * 4), p: r() * 7, s: 0.8 + r() * 2 });
-  }
-  const flies = [];
-  if (!rain && t >= 0.35) for (let i = 0; i < 16; i++) flies.push({ x: 100 + r() * 130, y: 70 + r() * 32, vx: 0, vy: 0, p: r() * 7, f: 0.7 + r() * 1.3 });
-  OUT = { t, rain, P, clouds, glints, flies, sun, moon, glintCol: sun ? '#ffd6a0' : '#c4d0ee' };
-}
-
-/* =====================================================================
-   Room layer (rebuilt when the lamp or candle is switched)
-   ===================================================================== */
-// the two light sources at full strength: lamp on the wall, lamp on the desk top, candle
-const lampRaw = (x, y) => { const dx = x - 44, dy = (y - 92) * 1.1, d2 = dx * dx + dy * dy; return 3.8 * Math.exp(-d2 / (2 * 50 * 50)) + 1.5 * Math.exp(-d2 / (2 * 13 * 13)); };
-const deskRaw = (x, y) => { const dx = x - 44, dy = (y - 134) * 2.2; return 3.6 * Math.exp(-(dx * dx + dy * dy) / (2 * 58 * 58)); };
-const candleRaw = (x, y) => { const dx = x - 214, dy = (y - 124) * 1.2; return 1.3 * Math.exp(-(dx * dx + dy * dy) / (2 * 18 * 18)); };
-// what the room is built with: each source counts only while it is switched on
-const lampLight = (x, y) => ST.lamp ? lampRaw(x, y) : 0;
-const candleLight = (x, y) => ST.candle ? candleRaw(x, y) : 0;
-const light = (x, y) => lampLight(x, y) + candleLight(x, y);
-const deskLight = (x, y) => (ST.lamp ? deskRaw(x, y) : 0) + candleLight(x, y);
-const vign = (x, y) => { const dx = (x - 160) / 160, dy = (y - 90) / 90; return Math.max(0, dx * dx + dy * dy - 0.35) * 1.2; };
-const bulbs = [];
-
-function buildRoom() {
-  const b = new Buf(W, H);
-  const wall = packRamp(RP.wall), wood = packRamp(RP.wood), under = packRamp(RP.under), cur = packRamp(RP.curtain), brass = packRamp(RP.brass);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    let v = 1.15 + light(x, y) - vign(x, y) - (((x + 3) % 12) < 6 ? 0.28 : 0);
-    if (y === 114) v -= 0.9; else if (y === 115) v -= 0.4;
-    b.set(x, y, dpick(wall, v, x, y));
-  }
-  // window frame + mullions
-  for (let y = 14; y <= 106; y++) for (let x = 92; x <= 236; x++) {
-    const inGlass = x >= 98 && x <= 230 && y >= 20;
-    const mull = (x >= 163 && x <= 165) || (y >= 43 && y <= 44);
-    if (inGlass && !mull) { b.set(x, y, 0); continue; }
-    let v = 3.1 + light(x, y) * 0.35;
-    if (inGlass) v = ((x === 163 || y === 43) ? 3.6 : (x === 165 || y === 44) ? 2.2 : 3.0) + light(x, y) * 0.3;
-    else if (x === 92 || x === 236 || y === 14) v -= 1.3;
-    else if ((x === 97 && y >= 19) || (y === 19 && x >= 97 && x <= 231)) v -= 1.1;
-    else if (x === 231 && y >= 19) v += 0.5;
-    else if (x === 93 || y === 15) v += 0.6;
-    b.set(x, y, dpick(wood, v, x, y));
-  }
-  // sill
-  for (let y = 107; y <= 113; y++) for (let x = 86; x <= 242; x++) {
-    let v;
-    if (y <= 109) v = 3.4 + light(x, y) * 0.35 + 0.15 * Math.sin(x * 0.7 + y * 2.3);
-    else if (y === 110) v = 4.3 + light(x, y) * 0.3;
-    else v = 2.0 + light(x, y) * 0.3 - (y - 111) * 0.3;
-    if (x === 86 || x === 242) v -= 1.2;
-    if (y === 107) v -= 0.8;
-    b.set(x, y, dpick(wood, v, x, y));
-  }
-  // curtains
-  const curtain = (x0, x1, dir) => {
-    for (let y = 9; y <= 121; y++) {
-      const sp = Math.floor((y - 9) / 34), a = dir < 0 ? x0 - sp : x0, e = dir < 0 ? x1 : x1 + sp;
-      for (let x = a; x <= e; x++) {
-        let v = 2.4 + Math.sin((x - a) * 0.95 + 0.5 + y * 0.012) * 1.0 + light(x, y) * 0.5;
-        if (x === a || x === e) v -= 0.9;
-        if (y <= 11) v += (x % 3 === 0) ? -0.8 : 0.3;
-        if (y >= 119) v -= 0.7;
-        b.set(x, y, dpick(cur, v, x, y));
-      }
-    }
-  };
-  curtain(78, 103, -1); curtain(225, 250, 1);
-  // rod
-  for (let x = 72; x <= 256; x++) { b.set(x, 7, dpick(brass, 3.6, x, 7)); b.set(x, 8, dpick(brass, 1.9, x, 8)); }
-  for (const fx of [69, 259]) for (let y = 5; y <= 10; y++) for (let x = fx - 2; x <= fx + 2; x++) if (Math.hypot(x - fx, y - 7.5) <= 2.3) b.set(x, y, dpick(brass, 2.2 + (x < fx ? 1.4 : 0) + (y < 7 ? 0.8 : 0), x, y));
-  for (let x = 80; x <= 250; x += 5) if (x < 104 || x > 224) { b.set(x, 9, brass[3]); b.set(x, 10, brass[1]); }
-  // fairy lights wire
-  // the bulbs are placed on the first build only, so a rebuild leaves their shimmer alone
-  const hooks = [70, 116, 164, 212, 258], wireC = pack(hex('#2a1e2c')), first = !bulbs.length;
-  for (let h = 0; h < hooks.length - 1; h++) {
-    const a = hooks[h], e = hooks[h + 1], mid = (a + e) / 2, half = (e - a) / 2;
-    for (let x = a; x <= e; x++) {
-      const y = Math.round(2 + 4 * (1 - Math.pow((x - mid) / half, 2)));
-      b.set(x, y, wireC);
-      if (first && (x - a) % 7 === 3) bulbs.push({ x, y: y + 1, p: Math.random() * 7, s: 0, c: ['#ffcf6b', '#ff9a66', '#ffe3a8', '#a8dcb0', '#f7a8bd'][bulbs.length % 5] });
-    }
-  }
-  // desk
-  for (let y = 124; y < H; y++) for (let x = 0; x < W; x++) {
-    if (y <= 150) {
-      let v = 1.4 + deskLight(x, y) + 0.32 * Math.sin(y * 1.9 + Math.sin(x * 0.045) * 2.4) + 0.12 * Math.sin(x * 0.5 + y * 3.1) - vign(x, y) * 0.6;
-      if (y === 124) v -= 1.4; else if (y === 125) v -= 0.6;
-      b.set(x, y, dpick(wood, v, x, y));
-    } else if (y <= 158) {
-      let v = (y === 151 ? 3.7 : 2.1 - (y - 152) * 0.14) + deskLight(x, 140) * 0.4 - vign(x, y) * 0.5;
-      if (y === 158) v -= 0.9;
-      b.set(x, y, dpick(wood, v, x, y));
-    } else {
-      if ((x >= 8 && x <= 13) || (x >= 306 && x <= 311)) { b.set(x, y, dpick(wood, 1.3 + (x === 8 || x === 306 ? 0.6 : 0) - (y - 159) * 0.04, x, y)); continue; }
-      b.set(x, y, dpick(under, 2.7 - (y - 159) * 0.09 - vign(x, y) * 0.5 + lampLight(x, y) * 0.1, x, y));
-    }
-  }
-  b.flush();
-  // sprites carry their own shading, so with the lamp off each gets a wash of shadow, deepest where the lamp used to reach
-  const put = (spr, x, y, lit) => {
-    if (!ST.lamp && !lit) {
-      const t = spr.getContext('2d');
-      t.globalCompositeOperation = 'source-atop'; t.fillStyle = '#0e0916';
-      t.globalAlpha = 0.2 + 0.3 * Math.min(1, lampRaw(x + spr.width / 2, y + spr.height / 2) / 3);
-      t.fillRect(0, 0, spr.width, spr.height);
-    }
-    b.cx.drawImage(spr, x, y);
-  };
-  put(sprPicture(), 16, 32);
-  put(sprShelf(), 256, 46);
-  put(sprPlant(), 2, 89);
-  put(sprLamp(ST.lamp), 29, 80, true);
-  put(sprBooks(), 60, 124);
-  put(sprNotebook(), 106, 134);
-  put(sprMug(), 90, 134);
-  put(sprCandle(), 210, 118, ST.candle);
-  put(sprBoombox(), 240, 106);
-  return b.cv;
-}
-// lamp light as an additive layer for the beat swell: dithered alpha steps keep the pixel grain,
-// and the room's own alpha masks it so the window glass stays dark
-function buildGlow() {
-  const b = new Buf(W, H), room = roomCv.getContext('2d').getImageData(0, 0, W, H).data, warm = hex('#ffc070');
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    if (!room[(y * W + x) * 4 + 3]) continue;
-    const v = (y >= 124 && y <= 158 ? deskRaw(x, y) : lampRaw(x, y)) / 5.3 * 4, i = Math.floor(v);
-    const lv = Math.min(4, v - i > BAYER[(y & 3) * 4 + (x & 3)] ? i + 1 : i);
-    if (lv > 0) b.set(x, y, pack(warm, lv * 48));
-  }
-  return b.flush();
-}
-
-/* ---------- portrait extensions: wall above, floor below ---------- */
-function buildExtTop(T) {
-  const b = new Buf(W, T), wall = packRamp(RP.wall), wood = packRamp(RP.wood);
-  for (let j = 0; j < T; j++) for (let x = 0; x < W; x++) {
-    const y = j - T;
-    if (j <= 4) {
-      const v = [0.8, 2.4, 3.0, 1.7, 1.1][j] + light(x, y) * 0.3 + (j === 2 && x % 8 === 0 ? -0.8 : 0);
-      b.set(x, j, dpick(wood, v, x, j)); continue;
-    }
-    let v = 1.15 + light(x, y) - vign(x, y) * 0.5 - (((x + 3) % 12) < 6 ? 0.28 : 0);
-    if (j === 5) v -= 0.9; else if (j === 6) v -= 0.4;
-    b.set(x, j, dpick(wall, v, x, j));
-  }
-  b.flush();
-  if (T >= 34) {
-    // hanging planter on macrame strings
-    const potY = Math.round(T * 0.5), px0 = 232, r = rng(17);
-    const sh = new Shape(30, T);
-    for (const dx of [-5, 0, 5]) sh.line(15, 5, 15 + dx, potY - 1, 2, 2.4);
-    sh.poly([[9, potY], [21, potY], [19, potY + 7], [11, potY + 7]], 0, 2.4);
-    sh.rect(8, potY - 1, 14, 2, 0, 3.2);
-    sh.ell(15, potY - 2, 5, 2, 1, 2.4); sh.ell(11, potY - 2, 2.5, 1.5, 1, 2.8); sh.ell(19, potY - 2, 2.5, 1.5, 1, 2.0);
-    for (let v = 0; v < 4; v++) {
-      const sx = 9.5 + v * 3.6, len = Math.min(T - potY - 4, 8 + r() * 22);
-      for (let y = potY + 1; y < potY + 1 + len; y++) {
-        const vx = sx + Math.sin(y * 0.35 + v * 1.9) * 1.4 + (v < 2 ? -1 : 1) * Math.max(0, (y - potY) * 0.06);
-        sh.put(vx, y, 3, 1.6);
-        if ((y + v * 2) % 4 === 0) sh.ell(vx + ((y >> 2) % 2 ? 1.5 : -1.5), y, 1.7, 1.2, 1, 1.8 + r());
-      }
-    }
-    b.cx.drawImage(sh.render([RP.terra, RP.green, RP.paper, RP.stem], { off: -0.6 }), px0 - 15, 0);
-  }
-  return b.cv;
-}
-function buildExtBottom(Bh) {
-  const b = new Buf(W, Bh), under = packRamp(RP.under), wood = packRamp(RP.wood);
-  const rugR = [packRamp(RP.maroon), packRamp(RP.mustard), packRamp(RP.teal)];
-  const floorY = clamp(Math.round(Bh * 0.18), 8, 30);
-  const rugTop = floorY + Math.max(8, Math.round((Bh - floorY) * 0.22)), rugBot = Bh - Math.max(6, Math.round((Bh - floorY) * 0.12));
-  const rugL = 104, rugR2 = 224;
-  // plank rows grow taller towards the viewer
-  const seams = []; for (let y = floorY, h = 3; y < Bh; h = Math.min(9, h + 1)) { seams.push(y); y += h; }
-  for (let j = 0; j < Bh; j++) for (let x = 0; x < W; x++) {
-    const y = H + j;
-    if (j < floorY) { b.set(x, j, dpick(under, 2.7 - (y - 159) * 0.09 - vign(x, 170) * 0.5 + (j > floorY - 6 ? (j - floorY + 6) * 0.25 : 0), x, j)); continue; }
-    const depth = (j - floorY) / Math.max(1, Bh - floorY);
-    const glow = 1.4 * Math.exp(-((x - 164) ** 2) / (2 * 70 * 70)) * (0.4 + depth);
-    if (j >= rugTop && j < rugBot && x >= rugL && x <= rugR2) {
-      const ix = x - rugL, iy = j - rugTop, w = rugR2 - rugL, hh = rugBot - rugTop;
-      const edge = Math.min(ix, w - ix, iy, hh - 1 - iy);
-      let m = 0, v = 1.6 + glow * 0.8 + depth * 0.6;
-      if (edge < 2) { m = 1; v += 0.3; }
-      else if (edge < 4) m = 0;
-      else if (edge < 5) m = 1;
-      else {
-        const cx = w / 2, cy = hh / 2, d = Math.abs(ix - cx) / (w / 2 - 5) + Math.abs(iy - cy) / (hh / 2 - 5);
-        if (Math.abs(d - 0.55) < 0.06 || Math.abs(d - 0.25) < 0.06) m = 1; else if (d < 0.12) m = 2;
-        if (((ix >> 2) + (iy >> 1)) % 6 === 0 && m === 0) v -= 0.5;
-      }
-      b.set(x, j, dpick(rugR[m], v, x, j)); continue;
-    }
-    if ((j === rugTop - 1 || j === rugBot) && x >= rugL && x <= rugR2 && x % 2 === 0) { b.set(x, j, dpick(packRamp(RP.paper), 1.6 + glow * 0.5, x, j)); continue; }
-    let v = 1.2 + depth * 1.0 + glow + 0.15 * Math.sin(x * 0.4 + j * 2.1);
-    const row = seams.findIndex((sy, i) => j >= sy && (i + 1 === seams.length || j < seams[i + 1]));
-    if (seams.includes(j)) v -= 1.2;
-    else if (((x + row * 37) % 64) === 0) v -= 1.0;
-    if (j >= rugBot && j < rugBot + 2 && x >= rugL + 2 && x <= rugR2 + 2) v -= 0.8;
-    b.set(x, j, dpick(wood, v, x, j));
-  }
-  b.flush();
-  // a ball of yarn on the rug
-  const yarn = new Shape(9, 9);
-  yarn.ell(4, 4, 3.6, 3.6, 0, 2.6);
-  for (let k = -3; k <= 3; k++) yarn.adj(4 + k, 4 + Math.round(k * 0.6), -1);
-  yarn.adj(3, 2, -0.9); yarn.adj(4, 2, -0.9); yarn.adj(6, 5, -0.9);
-  b.cx.drawImage(yarn.render([RP.mustard]), 196, rugTop + Math.round((rugBot - rugTop) * 0.35));
-  b.cx.fillStyle = '#b08834'; b.cx.fillRect(205, rugTop + Math.round((rugBot - rugTop) * 0.35) + 7, 6, 1); b.cx.fillRect(211, rugTop + Math.round((rugBot - rugTop) * 0.35) + 8, 4, 1);
-  return b.cv;
-}
-
-/* ---------- object sprites ---------- */
-function sprPicture() {
-  const s = new Shape(30, 26);
-  s.rect(1, 1, 28, 24, 0, 2.6);
-  s.rect(4, 4, 22, 18, 1, 3.3);
-  s.ell(18, 10, 3, 3, 2, 3);
-  s.poly([[4, 22], [11, 11], [18, 22]], 3, 2.2);
-  s.poly([[12, 22], [19, 14], [26, 22]], 3, 1.2);
-  s.rect(4, 19, 22, 3, 3, 0.8);
-  return s.render([RP.wood, RP.paper, RP.sunp, RP.mtnp], { off: 0.4 });
-}
-function sprShelf() {
-  const s = new Shape(62, 64), r = rng(3);
-  s.rect(1, 24, 60, 3, 0, 2.6);
-  s.rect(8, 27, 2, 5, 0, 1.6); s.rect(52, 27, 2, 5, 0, 1.6);
-  let x = 3;
-  for (const [w, h, m] of [[3, 14, 1], [4, 17, 2], [3, 12, 3], [4, 16, 1], [3, 13, 2], [4, 15, 3]]) { s.rect(x, 24 - h, w, h, m, 2.2 + r()); x += w; }
-  s.poly([[x, 24], [x + 3, 24], [x + 9, 12], [x + 6, 11]], 2, 2.4);
-  s.rect(40, 16, 11, 8, 4, 2.4); s.rect(39, 15, 13, 2, 4, 3.4);
-  s.ell(45, 12, 3, 2, 5, 2.6); s.ell(42, 13, 2.2, 1.4, 5, 2.2); s.ell(48.5, 13, 2.2, 1.4, 5, 2.0);
-  for (let v = 0; v < 4; v++) {
-    const sx = 40.5 + v * 3.2, len = 14 + r() * 26;
-    for (let y = 22; y < 22 + len; y++) {
-      const vx = sx + Math.sin(y * 0.33 + v * 1.7) * 1.6;
-      s.put(vx, y, 6, 1.6);
-      if ((y + v * 2) % 4 === 0) s.ell(vx + ((y >> 2) % 2 ? 1.6 : -1.6), y, 1.7, 1.2, 5, 2.0 + r());
-    }
-  }
-  return s.render([RP.wood, RP.maroon, RP.teal, RP.mustard, RP.terra, RP.green, RP.stem], { off: -0.2 });
-}
-function sprPlant() {
-  const s = new Shape(38, 52), r = rng(11);
-  const leaves = [];
-  for (let k = 0; k < 13; k++) {
-    const a = -Math.PI / 2 + (k - 6) * 0.2 + (r() - 0.5) * 0.25, L = 12 + (1 - Math.abs(k - 6) / 7) * 18 + r() * 6;
-    leaves.push([a, L, 1.5 + r() * 1.6]);
-  }
-  for (const [a, L] of leaves) s.line(18, 37, 18 + Math.cos(a) * L * 0.7, 37 + Math.sin(a) * L * 0.7, 2, 1.6);
-  for (const [a, L, lv] of leaves) s.ell(18 + Math.cos(a) * L * 0.78, 37 + Math.sin(a) * L * 0.78, 6.5, 2.3, 1, lv, a);
-  s.poly([[9, 38], [27, 38], [25, 51], [11, 51]], 0, 2.2);
-  s.rect(8, 36, 20, 3, 0, 3.1);
-  return s.render([RP.terra, RP.green, RP.stem], { light: 1 });
-}
-function sprLamp(on) {
-  const s = new Shape(30, 57);
-  s.line(15, 19, 15, 52, 1, on ? 2.6 : 0.8, 2);
-  s.ell(15, 53, 8, 2.5, 1, on ? 2.8 : 1);
-  s.poly([[9, 2], [21, 2], [27.5, 19], [2.5, 19]], 0, on ? (x, y) => 2.2 + (y - 2) / 16 * 1.6 : 0.9);
-  s.rect(3, 18, 24, 1, 0, on ? 4.4 : 1.4);
-  if (on) for (let x = 10; x <= 20; x++) s.dot(x, 19, x > 12 && x < 18 ? '#fff6d0' : '#ffe39a');
-  return s.render([RP.shade, RP.brass], { light: 0, rim: 0.6 });
-}
-function sprBooks() {
-  const s = new Shape(30, 16);
-  s.rect(1, 11, 27, 4, 0, 2.5); s.rect(3, 6, 23, 5, 1, 2.4); s.rect(2, 2, 21, 4, 2, 2.6);
-  s.rect(11, 12, 6, 2, 3, 3.4); s.rect(8, 8, 8, 1, 3, 3.2); s.rect(14, 3, 4, 2, 3, 3);
-  return s.render([RP.maroon, RP.teal, RP.mustard, RP.paper]);
-}
-function sprNotebook() {
-  const s = new Shape(36, 12);
-  s.rect(1, 9, 34, 2, 1, 1.6);
-  s.poly([[2, 9.5], [17.5, 10], [17.5, 3.5], [4, 1.5]], 0, 3.3);
-  s.poly([[18, 10], [33.5, 9.5], [31.5, 1.5], [18, 3.5]], 0, 3.6);
-  s.line(22, 3, 32, 7, 2, 2.4);
-  for (const y of [4, 6, 8]) for (let x = 5; x < 32; x++) if (x !== 17 && x !== 18 && x % 4 !== 0 && !(x > 21 && y < 7)) s.dot(x, y, '#a8927e');
-  return s.render([RP.paper, RP.teal, RP.graphite], { off: 0.2 });
-}
-function sprMug() {
-  const s = new Shape(15, 14);
-  s.rect(2, 3, 9, 10, 0, 2.9);
-  s.rect(2, 8, 9, 2, 2, 2.5);
-  for (const [x, y] of [[11, 5], [12, 5], [13, 6], [13, 7], [13, 8], [12, 9], [11, 9]]) s.put(x, y, 0, 2.6);
-  s.ell(6.5, 3, 4.4, 1.2, 1, 1.6);
-  return s.render([RP.cream, RP.coffee, RP.terra]);
-}
-function sprCandle() {
-  const s = new Shape(9, 15);
-  s.ell(4, 13, 4, 1.5, 0, 2.8);
-  s.rect(2, 4, 5, 9, 1, 3.8);
-  s.dot(4, 3, '#2a1a14');
-  return s.render([RP.brass, RP.cream], { light: 0, rim: 0.7 });
-}
-function sprBoombox() {
-  const s = new Shape(58, 31);
-  s.rect(15, 1, 28, 2, 0, 3); s.rect(15, 1, 2, 5, 0, 2.6); s.rect(41, 1, 2, 5, 0, 2.6);
-  s.rect(1, 5, 56, 25, 0, 2.6);
-  for (const cx of [12, 46]) {
-    s.ell(cx, 18, 9, 9, 1, (x, y) => 2.4 - ((x + y) & 1) * 0.7);
-    s.ell(cx, 18, 4, 4, 1, 1.0);
-    s.ell(cx, 18, 1.4, 1.4, 1, 3.4);
-  }
-  s.rect(23, 9, 12, 8, 2, 1.8);
-  s.rect(23, 20, 3, 2, 3, 2.6); s.rect(27, 20, 3, 2, 3, 2.6); s.rect(31, 20, 3, 2, 0, 4.2);
-  s.rect(22, 24, 14, 3, 1, 0.6);
-  return s.render([RP.boom, RP.grille, RP.glass, RP.orange], { off: -0.3 });
-}
-
-/* ---------- cats ---------- */
-function curls(x, y) { return ((x * 2 + y * 3) % 7 === 0 ? -0.8 : 0) + ((x * 5 + y) % 9 === 0 ? 0.45 : 0); }
-// eyes are 3x2 pixels: a pupil colour, then [left, right] iris colours for the top and bottom row
-const EYES = {
-  devon: { pupil: '#151a26', iris: [['#e6eef4', '#9fb8cc'], ['#6f8aa6', '#6f8aa6']] },
-  sph: { pupil: '#120d0e', iris: [['#c4d468', '#a6bc52'], ['#e8c44c', '#d0a83a']] }
-};
-// one eye as [col, row, colour]. The pupil column follows lx (-1..1); looking up or down (ly) keeps the pupil in one row only.
-function eyePx(E, lx, ly) {
-  const out = [];
-  for (let r = 0; r < 2; r++) {
-    const pc = ly === 0 || (ly < 0) === (r === 0) ? 1 + lx : -1;
-    let k = 0;
-    for (let i = 0; i < 3; i++) out.push([i, r, i === pc ? E.pupil : E.iris[r][k++ ? 1 : 0]]);
-  }
-  return out;
-}
-// `inhale` lifts the chest one row; legs, paws and haunches stay put, and the curls ride up with the chest
-function devonBody(inhale) {
-  const s = new Shape(28, 25), B = 4, up = inhale ? 1 : 0;
-  s.ell(14, 13 - up, 8, 8, 0, B); s.ell(14, 18, 10, 5, 0, B);
-  s.ell(14, 11 - up, 4.2, 5, 0, B + 1);
-  s.rect(10, 12, 3, 10, 0, B + 0.25); s.rect(15, 12, 3, 10, 0, B + 0.25);
-  for (let y = 15; y < 22; y++) { s.adj(13, y, -1.3); s.adj(14, y, -0.6); }
-  s.rect(9, 21, 4, 2, 0, B + 0.8); s.rect(15, 21, 4, 2, 0, B + 0.8);
-  s.texture((x, y) => curls(x, y < 13 ? y + up : y));
-  return s.render([RP.devon]);
-}
-function devonHead(eyes, mouth, lx = 0, ly = 0) {
-  const s = new Shape(28, 22), B = 4;
-  s.poly([[5, 14], [11, 8], [1.5, 1]], 0, B - 0.2); s.poly([[23, 14], [17, 8], [26.5, 1]], 0, B - 0.2);
-  s.ell(14, 14, 7.5, 6, 0, B); s.ell(14, 16, 8.2, 4, 0, B);
-  s.ell(14, 17.5, 3.4, 2.2, 0, B + 1);
-  s.poly([[5.5, 12], [9.5, 8.5], [3, 3.5]], 1, 2.4); s.poly([[22.5, 12], [18.5, 8.5], [25, 3.5]], 1, 2.4);
-  s.texture((x, y, m) => m === 0 && y > 9 && y < 13 ? curls(x, y) * 0.5 : 0);
-  if (eyes === 'open') { for (const ex of [9, 17]) for (const [i, r, c] of eyePx(EYES.devon, lx, ly)) s.dot(ex + i, 14 + r, c); }
-  else for (const ex of [9, 17]) for (let i = 0; i < 3; i++) s.dot(ex + i, 15, '#4a4256');
-  s.dot(14, 17, '#d9939a'); s.dot(14, 18, '#6d5f72');
-  if (mouth) { s.dot(13, 19, '#4a2230'); s.dot(14, 19, '#4a2230'); s.dot(15, 19, '#4a2230'); s.dot(14, 20, '#c06a78'); }
-  else { s.dot(13, 19, '#6d5f72'); s.dot(15, 19, '#6d5f72'); }
-  return s.render([RP.devon, RP.pinkEar], { openBelow: 18 });
-}
-function sphynxBody(inhale) {
-  // side-sitting, upright on long front legs; paws on y=29. `inhale` lifts the chest one row.
-  const s = new Shape(36, 32), B = 3, G = 29, cy = 8, cr = 4.5, hr = 7, ty = 5, up = inhale ? 1 : 0;
-  const hy = G - hr + 1;
-  s.ell(23, hy, hr, hr, 0, B);
-  s.ell(17, (cy + hy) / 2, Math.hypot(12, hy - cy) / 2 + 2, ty, 0, B, Math.atan2(hy - cy, 12));
-  s.ell(11, cy - up, cr, 7, 0, B);
-  s.rect(13, cy + 4, 3, G - 1 - (cy + 4), 0, B - 1);
-  s.rect(8, cy + 3, 3, G - 1 - (cy + 3), 0, B);
-  s.rect(7, G - 1, 4, 2, 0, B + 1); s.rect(12, G - 1, 4, 2, 0, B);
-  s.ell(26, G - 1, 4.5, 1.6, 0, B + 1);
-  for (let x = 8; x <= 14; x++) s.adj(x, cy - 6 - up, -0.9);
-  for (let x = 9; x <= 13; x++) s.adj(x, cy - 4 - up, -0.7);
-  return s.render([RP.sphynx]);
-}
-// `flick` ('L' or 'R') folds that ear tip back by two pixels; lx, ly point the pupils
-function sphynxHead(eyes, mouth, flick, lx = 0, ly = 0) {
-  const s = new Shape(28, 24), B = 4, fl = flick === 'L', fr = flick === 'R';
-  s.poly([[5, 15], [11, 9], fl ? [3.5, 4.5] : [1.5, 2]], 0, B - 1); s.poly([[23, 15], [17, 9], fr ? [24.5, 4.5] : [26.5, 2]], 0, B - 1);
-  s.ell(14, 15, 7, 6, 0, B); s.ell(14, 17, 7.6, 4.2, 0, B);
-  s.poly([[5.5, 13], [9.5, 9.5], fl ? [4.5, 6.5] : [3, 4.5]], 1, 2); s.poly([[22.5, 13], [18.5, 9.5], fr ? [23.5, 6.5] : [25, 4.5]], 1, 2);
-  s.ell(14, 18.5, 3.2, 2.3, 0, B - 2); // whisker pads: darker than skin, lighter than the mask
-  // dark mask on the nose bridge only: between the eyes, down to the nose
-  for (let y = 12; y <= 17; y++) {
-    const [x0, x1] = y === 12 || y === 17 ? [13, 15] : [12, 16];
-    for (let x = x0; x <= x1; x++) s.put(x, y, 2, y === 12 || x === x0 || x === x1 ? 2.6 : 2);
-  }
-  // brow and forehead wrinkles
-  for (const x of [11, 12, 13, 15, 16, 17]) s.adj(x, 10, -1.6);
-  for (const x of [10, 11, 12, 16, 17, 18]) s.adj(x, 12, -1.6);
-  for (const x of [9, 10, 11, 17, 18, 19]) s.adj(x, 14, -1);
-  s.adj(8, 16, -0.8); s.adj(20, 16, -0.8); s.adj(8, 18, -0.8); s.adj(20, 18, -0.8);
-  for (const ex of [9, 17]) {
-    if (eyes === 'open') { for (const [i, r, c] of eyePx(EYES.sph, lx, ly)) s.dot(ex + i, 15 + r, c); }
-    else if (eyes === 'half') {
-      // sleepy: the lid covers the top row, the pupil can still slide sideways under it
-      for (let i = 0; i < 3; i++) s.dot(ex + i, 15, '#3a2f33');
-      for (const [i, r, c] of eyePx(EYES.sph, lx, 0)) if (r === 1) s.dot(ex + i, 16, c);
-    } else for (let i = 0; i < 3; i++) s.dot(ex + i, 16, '#2a2124');
-  }
-  s.dot(14, 18, '#1e1518'); s.dot(14, 19, '#2a1f22');
-  if (mouth) { s.dot(13, 20, '#3a1820'); s.dot(14, 20, '#3a1820'); s.dot(15, 20, '#3a1820'); s.dot(14, 21, '#a85a68'); }
-  else { s.dot(13, 20, '#2a1f22'); s.dot(15, 20, '#2a1f22'); }
-  return s.render([RP.sphynx, RP.sphEar, RP.sphMask], { openBelow: 20 });
 }
 
 /* =====================================================================
@@ -943,7 +287,7 @@ function initAudio() {
     }
     const src = AC.createBufferSource(); src.buffer = b; src.loop = true; src.loopEnd = (len - F) / sr;
     const rhp = BQ('highpass', 220), rlp = BQ('lowpass', 4200);
-    rainG = G(ST.rain ? 0.5 : 0);
+    rainG = G(ST.rain ? 0.5 : ST.storm ? 0.75 : 0);
     src.connect(rhp); rhp.connect(rlp); rlp.connect(rainG); rainG.connect(master); src.start(); }
 }
 
@@ -1080,6 +424,24 @@ function sfx(freq, tail, vel) {
   const t = AC.currentTime + 0.01, n = noiseAt(), bp = BQ('bandpass', freq, 1.2), a = G(0);
   a.gain.setValueAtTime(vel, t); a.gain.setTargetAtTime(0, t, tail);
   n.connect(bp); bp.connect(a); a.connect(master); n.start(t, Math.random()); n.stop(t + tail * 8 + 0.05);
+}
+// thunder: a rumble of low noise that swells, rolls a few times and fades; a close strike starts with a crack
+function thunder(near) {
+  if (!AC || !playing) return;
+  const t = AC.currentTime + 0.02, n = noiseAt(); n.loop = true;
+  const lp = BQ('lowpass', near ? 260 : 140, 0.9), lp2 = BQ('lowpass', near ? 420 : 220, 0.7), g = G(0);
+  const peak = (near ? 0.9 : 0.55) * (0.7 + Math.random() * 0.3);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + (near ? 0.04 : 0.35));
+  let tt = t + (near ? 0.25 : 0.6);
+  for (let k = 0; k < 3; k++) { g.gain.setTargetAtTime(peak * (0.45 + 0.45 * Math.random()), tt, 0.25); tt += 0.4 + Math.random() * 0.6; }
+  g.gain.setTargetAtTime(0, tt, 0.9);
+  n.connect(lp); lp.connect(lp2); lp2.connect(g); g.connect(master);
+  n.start(t, Math.random()); n.stop(tt + 5);
+  if (near) {
+    const c = noiseAt(), hp = BQ('highpass', 900), cg = G(0);
+    cg.gain.setValueAtTime(0.35, t); cg.gain.setTargetAtTime(0, t, 0.05);
+    c.connect(hp); hp.connect(cg); cg.connect(master); c.start(t, Math.random()); c.stop(t + 0.5);
+  }
 }
 function catSay(id, kind) {
   if (!AC || !playing) return;
@@ -1934,11 +1296,14 @@ function syncUI() {
   $('play').innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
   $('play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
   $('rain').setAttribute('aria-pressed', ST.rain);
+  $('snow').setAttribute('aria-pressed', ST.snow);
   $('vol').value = ST.vol; $('bpm').value = ST.bpm; $('bpmv').textContent = ST.bpm; $('vinyl').value = ST.vinyl;
   $('vinyl').nextElementSibling.textContent = Math.round(ST.vinyl * 100);
   $('purr').value = ST.purr; $('purr').nextElementSibling.textContent = Math.round(ST.purr * 100);
   $('beat').value = ST.beat; $('beat').nextElementSibling.textContent = Math.round(ST.beat * 100);
   for (const b of $('sky').children) b.setAttribute('aria-pressed', b.dataset.v === ST.sky);
+  for (const b of $('weather').children) b.setAttribute('aria-pressed', b.dataset.v === weatherNow());
+  for (const b of $('season').children) b.setAttribute('aria-pressed', b.dataset.v === ST.season);
   for (const b of $('layers').children) b.setAttribute('aria-pressed', !!ST.layers[b.dataset.v]);
 }
 async function togglePlay() {
@@ -1948,32 +1313,37 @@ async function togglePlay() {
   $('bigplay').classList.add('gone');
   syncUI(); poke();
 }
-function setRain(on) {
-  ST.rain = on; save(); buildOutside(); spawnRain();
-  if (AC) rainG.gain.setTargetAtTime(on ? 0.5 : 0, AC.currentTime, 0.8);
+// weather: clear, rain, snow or fog, one at a time. The view outside follows, and the rain sound plays only in rain.
+const WEATHER = ['clear', 'rain', 'storm', 'snow', 'fog'];
+const weatherNow = () => ST.rain ? 'rain' : ST.storm ? 'storm' : ST.snow ? 'snow' : ST.fog ? 'fog' : 'clear';
+function setWeather(w) {
+  ST.rain = w === 'rain'; ST.storm = w === 'storm'; ST.snow = w === 'snow'; ST.fog = w === 'fog'; save(); spawnRain(); spawnSnow(); setSky(viewFor());
+  if (ST.storm) nextStrike = 1.5 + Math.random() * 3;
+  if (AC) rainG.gain.setTargetAtTime(ST.rain ? 0.5 : ST.storm ? 0.75 : 0, AC.currentTime, 0.8);
   syncUI();
 }
+function setRain(on) { setWeather(on ? 'rain' : 'clear'); }
+function setSnow(on) { setWeather(on ? 'snow' : 'clear'); }
 function nextTrack() { if (!AC) { togglePlay(); return; } skipFlag = true; }
 function setVol(v) { ST.vol = v; if (AC) master.gain.setTargetAtTime(v, AC.currentTime, 0.05); save(); }
 // lamp or candle switched: rebuild everything their light touches and fade the room over in `fade` seconds
 function relight(fade) {
   save(); roomPrev = roomCv; roomCv = buildRoom(); roomFade = 0; roomFadeT = fade;
-  if (ext) ext.top = buildExtTop(ext.T);
 }
-function setLamp(on) { ST.lamp = on; relight(on ? 0.08 : 0.3); sfx(2600, 0.005, 0.3); }
+function setLamp(on) { lightWas = lightNow(); ST.lamp = on; relight(on ? 0.08 : 0.3); sfx(2600, 0.005, 0.3); }
 function setCandle(on) {
-  ST.candle = on; relight(0.15);
+  ST.candle = on; lightWas = lightNow(); relight(0.15);
   if (on) flare = 1;
   // smoke: each puff rises at its own speed, so the wisp stretches as it climbs
-  else { sfx(650, 0.05, 0.14); for (let i = 0; i < 10; i++) steam.push({ x: 214, y: 119, v: 3 + i * 0.7, a: Math.random() * 0.6, p: Math.random() * 6, c: '#a8a2b0' }); }
+  else { sfx(650, 0.05, 0.14); for (let i = 0; i < 10; i++) steam.push({ x: 342, y: 83, v: 3 + i * 0.7, a: Math.random() * 0.6, p: Math.random() * 6, c: '#a8a2b0' }); }
 }
 // what a click on each prop does
 const ACT = {
   lamp: () => setLamp(!ST.lamp),
   candle: () => setCandle(!ST.candle),
-  window: () => setRain(!ST.rain),
+  window: () => setWeather(WEATHER[(WEATHER.indexOf(weatherNow()) + 1) % WEATHER.length]),
   deck: () => { if (playing) { nextTrack(); ffwd = 1; } else togglePlay(); },
-  mug: () => { for (let i = 0; i < 9; i++) steam.push({ x: 94 + Math.random() * 6, y: 135 - Math.random() * 3, a: Math.random() * 0.6, p: Math.random() * 6 }); }
+  mug: () => { for (let i = 0; i < 9; i++) steam.push({ x: 155 + Math.random() * 6, y: 142 - Math.random() * 3, a: Math.random() * 0.6, p: Math.random() * 6 }); }
 };
 function fullscreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {}); else document.exitFullscreen?.(); }
 
@@ -1981,6 +1351,7 @@ $('bigplay').onclick = togglePlay;
 $('play').onclick = togglePlay;
 $('next').onclick = nextTrack;
 $('rain').onclick = () => setRain(!ST.rain);
+$('snow').onclick = () => setSnow(!ST.snow);
 $('fs').onclick = fullscreen;
 $('gear').onclick = () => { const p = $('panel'); p.hidden = !p.hidden; $('gear').setAttribute('aria-expanded', !p.hidden); };
 $('vol').oninput = e => setVol(+e.target.value);
@@ -1988,7 +1359,9 @@ $('bpm').oninput = e => { ST.bpm = +e.target.value; $('bpmv').textContent = ST.b
 $('purr').oninput = e => { ST.purr = +e.target.value; e.target.nextElementSibling.textContent = Math.round(ST.purr * 100); if (purrBus) purrBus.gain.setTargetAtTime(ST.purr, AC.currentTime, 0.05); save(); };
 $('beat').oninput = e => { ST.beat = +e.target.value; e.target.nextElementSibling.textContent = Math.round(ST.beat * 100); save(); };
 $('vinyl').oninput = e => { ST.vinyl = +e.target.value; e.target.nextElementSibling.textContent = Math.round(ST.vinyl * 100); if (AC) vinylG.gain.setTargetAtTime(ST.vinyl * 0.7, AC.currentTime, 0.05); save(); };
-$('sky').onclick = e => { const v = e.target.dataset.v; if (!v) return; ST.sky = v; save(); buildOutside(); syncUI(); };
+$('sky').onclick = e => { const v = e.target.dataset.v; if (!v) return; ST.sky = v; save(); setSky(viewFor()); syncUI(); };
+$('weather').onclick = e => { const v = e.target.dataset.v; if (v) setWeather(v); };
+$('season').onclick = e => { const v = e.target.dataset.v; if (!v) return; ST.season = v; save(); setSky(viewFor()); syncUI(); };
 $('layers').onclick = e => {
   const v = e.target.dataset.v; if (!v) return;
   ST.layers[v] = !ST.layers[v]; save();
@@ -2000,6 +1373,8 @@ addEventListener('keydown', e => {
   if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
   else if (e.code === 'KeyN') nextTrack();
   else if (e.code === 'KeyR') setRain(!ST.rain);
+  else if (e.code === 'KeyS') setSnow(!ST.snow);
+  else if (e.code === 'KeyT') setWeather(ST.storm ? 'clear' : 'storm');
   else if (e.code === 'KeyF') fullscreen();
   else if (e.code === 'KeyL') setLamp(!ST.lamp);
   else if (e.code === 'KeyC') setCandle(!ST.candle);
@@ -2011,45 +1386,357 @@ function poke() { document.body.classList.remove('idle'); clearTimeout(idleT); i
 addEventListener('pointermove', poke); addEventListener('pointerdown', poke);
 
 /* =====================================================================
+   Scene art: the view outside, the empty room, the two cats as sprites, and the live bits drawn over them
+   ===================================================================== */
+// the view outside the window, one picture per sky; the room without the cats, its glass clear, and its RGBA pixels
+// (null where the browser keeps them back, e.g. a page opened from file://); the cats as one sheet of sprites.
+// scene.json says where each layer and sprite goes, and lists the skies: each with the disc of its sun or moon,
+// which must not twinkle, and whether its sky has stars. The room's `lights` are the same room redrawn in other light
+// with the lamp off: `unlit` by moonlight, `unlit-day` by daylight. Each keeps its pixels (d), what its light does
+// to a colour at each spot for the cats (ratio, at most `max`), and its own reel frames.
+const ART = { skies: {}, room: new Image(), sheet: new Image(), lights: {}, d: null, at: [0, 0] };
+// every file is asked for with scene.json's version, so a browser holding older copies fetches these ones
+function loadArt(meta) {
+  const v = meta.version ? '?v=' + meta.version : '', R = meta.layers.find(l => l.name === 'room');
+  ART.room.src = R.file + v; ART.sheet.src = meta.sheet + v;
+  // a light that fails to load is left out; with none the lamp falls back on dimming the lit room (unlitGuess)
+  const lights = Object.entries(R.lights || {}).map(([k, L]) => {
+    const img = new Image(); img.src = L.file + v;
+    ART.lights[k] = { img, max: L.max || 1, d: null, ratio: null, reels: null };
+    return loaded(img).catch(() => { delete ART.lights[k]; });
+  });
+  return Promise.all([loadSkies(meta, v), loaded(ART.room), loaded(ART.sheet), ...lights]);
+}
+// an image is ready once it has loaded (decode() can wait for the page to be drawn, which a hidden page never is)
+const loaded = img => img.complete && img.naturalWidth ? Promise.resolve() : new Promise((ok, no) => { img.addEventListener('load', ok); img.addEventListener('error', no); });
+function loadSkies(meta, v) {
+  const L = meta.layers.find(l => l.name === 'outside');
+  ART.at = L.at;
+  return Promise.all(Object.entries(L.skies).map(([name, s]) => {
+    const img = new Image(); img.src = s.file + v;
+    ART.skies[name] = { img, disc: s.disc || [0, 0, 0], stars: s.stars !== false, warm: s.glints === 'warm', cool: s.glints === 'cool', twinkles: [] };
+    return loaded(img);
+  }));
+}
+// which sky shows: the setting, or on auto the clock (dusk from 5 to 6 am, sunrise from 6 to 8 am, day from 8 am to
+// 5 pm, sunset from 5 to 7 pm, dusk from 7 to 9 pm, night from 9 pm to 5 am). A change fades over.
+const SKY_TIMES = ['sunrise', 'day', 'sunset', 'dusk', 'night'];   // the skies a setting can pick; weather views and the lightning frame are not among them
+const skyFor = () => { if (SKY_TIMES.includes(ST.sky)) return ST.sky; const h = new Date().getHours(); return h >= 21 || h < 5 ? 'night' : h >= 19 || h < 6 ? 'dusk' : h < 8 ? 'sunrise' : h >= 17 ? 'sunset' : 'day'; };
+// the season: autumn swaps the day view for its own; on auto, autumn runs from September to November
+const seasonNow = () => ST.season === 'summer' || ST.season === 'autumn' ? ST.season : [8, 9, 10].includes(new Date().getMonth()) ? 'autumn' : 'summer';
+const seasonal = s => s === 'day' && seasonNow() === 'autumn' && ART.skies.autumn ? 'autumn' : s;
+// the view shown: the rain, storm, snow or fog picture in that weather (when there is one), else the sky of the hour
+const viewFor = () => ST.rain && ART.skies.rain ? 'rain' : ST.storm && ART.skies.storm ? 'storm' : ST.snow && ART.skies.snow ? 'snow' : ST.fog && ART.skies.fog ? 'fog' : seasonal(skyFor());
+let sky = 'night', skyPrev = null, skyFade = 1;
+// with the lamp off, a sky change can change the room's light too: it fades over with the sky
+function setSky(name) {
+  if (name === sky || !ART.skies[name]) return;
+  const was = lightNow(); skyPrev = sky; sky = name; skyFade = 0;
+  if (roomCv && lightNow() !== was) { lightWas = was; roomPrev = roomCv; roomCv = buildRoom(); roomFade = 0; roomFadeT = 1.2; }
+}
+// the room's light: lit while the lamp is on; off, daylight under a daytime sky and moonlight under the rest (either
+// one if only one is there), or 'guess', the lit room dimmed by unlitGuess, when there is none
+const DAY_VIEWS = ['sunrise', 'day', 'autumn', 'sunset'];
+function lightNow() {
+  if (ST.lamp) return 'lit';
+  const want = DAY_VIEWS.includes(sky) ? ['unlit-day', 'unlit'] : ['unlit', 'unlit-day'];
+  return want.find(k => ART.lights[k] && ART.lights[k].d) || 'guess';
+}
+const inBox = (x, y, [bx, by, w, h]) => x >= bx && x < bx + w && y >= by && y < by + h;
+const glass = new Uint8Array(W * H);   // 1 where the room's glass is clear and the view outside shows through
+// the lamp's light as the picture paints it, 1 at the shade
+const lampFall = (x, y) => { const dx = (x - 45) / 70, dy = (y - 98) / 60; return Math.exp(-(dx * dx + dy * dy) / 2); };
+const lum = (d, i) => 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2];
+// one pixel with the lamp switched off, guessed from the lit picture when there is no unlit room: its warm light
+// drains out, and on the shade the lit cloth goes dull
+function unlitGuess(d, i, x, y) {
+  const L = lampFall(x, y);
+  let k = 1 - 0.62 * L;
+  if (x >= 14 && x < 76 && y >= 72 && y < 122 && d[i] > 170 && d[i + 1] > 110) k *= 0.55;
+  d[i] *= k; d[i + 1] *= k * (0.9 + 0.1 * k); d[i + 2] *= Math.min(1, k + 0.3 * L);
+}
+// what a light does to a colour at each spot, for the cats (its room holds everything else): its room over the lit
+// one per channel, each summed over the room's pixels in a 9x9 box, so it is the light and not the texture; across
+// the glass, where the room has no pixels, it leans on the window's surroundings. Its tint is halved and it stays
+// within 0.2..max (1 for moonlight, which only takes the lamp away), or the unlit desk's cool sheen would turn the
+// Sphynx blue. relight.py computes the same (light_ratio).
+function lightRatio(b, max) {
+  const R = 4, PRIOR = 12, a = ART.d, out = new Float64Array(W * H * 3), S = W + 1;   // 64-bit, as relight.py, so the two round alike
+  const o = Object.values(ART.skies)[0].img, [bx, by] = ART.at;
+  for (let c = 0; c < 3; c++) {
+    const sl = new Float64Array(S * (H + 1)), su = new Float64Array(S * (H + 1));   // summed-area tables
+    let pl = 0, pu = 0, pn = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const p = y * W + x, i = p * 4 + c, s = glass[p] ? 0 : 1, q = (y + 1) * S + x + 1;
+      sl[q] = s * a[i] + sl[q - 1] + sl[q - S] - sl[q - S - 1];
+      su[q] = s * b[i] + su[q - 1] + su[q - S] - su[q - S - 1];
+      if (s && x >= bx && x < bx + o.width && y >= by && y < by + o.height) { pl += a[i]; pu += b[i]; pn++; }
+    }
+    pl = PRIOR * pl / pn; pu = PRIOR * pu / pn;
+    const box = (t, x, y) => { const xa = Math.max(0, x - R), xb = Math.min(W, x + R + 1), ya = Math.max(0, y - R), yb = Math.min(H, y + R + 1);
+      return t[yb * S + xb] - t[ya * S + xb] - t[yb * S + xa] + t[ya * S + xa]; };
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) out[(y * W + x) * 3 + c] = (box(su, x, y) + pu) / (box(sl, x, y) + pl);
+  }
+  for (let p = 0; p < W * H; p++) {
+    const m = (out[p * 3] + out[p * 3 + 1] + out[p * 3 + 2]) / 3;
+    for (let c = 0; c < 3; c++) out[p * 3 + c] = clamp(m + 0.5 * (out[p * 3 + c] - m), 0.2, max);
+  }
+  return out;
+}
+// one pixel of a cat at scene x, y in light k (lamp off). The cat's soft shadow on the desk or sill (a pixel that is
+// the lit room beneath it, darkened) becomes that light's room darkened the same; any other pixel takes the light
+// ratio. relight.py does the same (relight_sprite).
+function relit(d, i, x, y, k) {
+  const Lt = ART.lights[k];
+  if (!Lt || !Lt.ratio || x < 0 || x >= W || y < 0 || y >= H) { unlitGuess(d, i, x, y); return; }
+  const p = y * W + x, j = p * 4, L = ART.d, U = Lt.d;
+  if (!glass[p]) {
+    const k = lum(d, i) / Math.max(lum(L, j), 1);
+    if (k <= 1.15 && Math.abs(d[i] - k * L[j]) <= 20 && Math.abs(d[i + 1] - k * L[j + 1]) <= 20 && Math.abs(d[i + 2] - k * L[j + 2]) <= 20) {
+      d[i] = k * U[j]; d[i + 1] = k * U[j + 1]; d[i + 2] = k * U[j + 2]; return;
+    }
+  }
+  const r = Lt.ratio;
+  d[i] *= r[p * 3]; d[i + 1] *= r[p * 3 + 1]; d[i + 2] *= r[p * 3 + 2];
+}
+function readArt() {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const cx = c.getContext('2d', { willReadFrequently: true }); cx.drawImage(ART.room, 0, 0);
+  try { ART.d = cx.getImageData(0, 0, W, H).data; } catch (e) { return; }
+  for (let i = 0; i < W * H; i++) glass[i] = ART.d[i * 4 + 3] ? 0 : 1;
+  for (const Lt of Object.values(ART.lights)) { cx.clearRect(0, 0, W, H); cx.drawImage(Lt.img, 0, 0); Lt.d = cx.getImageData(0, 0, W, H).data; Lt.ratio = lightRatio(Lt.d, Lt.max); }
+  // each sky's twinkles: a glass pixel well above the middle of its eight neighbours, dimming toward their darker
+  // half. Below row 85 is the lake; a sky without stars twinkles only there, a snowy or icy view (glints: warm) only
+  // in its warm lights, so the snow itself does not glitter all over, and a sunny view (glints: cool) only in its
+  // blue-white sparkles, so sunlit leaves and roofs stay still.
+  for (const S of Object.values(ART.skies)) {
+    cx.clearRect(0, 0, W, H); cx.drawImage(S.img, ART.at[0], ART.at[1]);
+    const d = cx.getImageData(0, 0, W, H).data, [dx, dy, dr] = S.disc;
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+      if (!glass[y * W + x] || Math.hypot(x - dx, y - dy) < dr || (!S.stars && y <= 85)) continue;
+      const nb = [];
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) if (j || k) nb.push(((y + j) * W + x + k) * 4);
+      nb.sort((a, b) => lum(d, a) - lum(d, b));
+      const i = (y * W + x) * 4, own = lum(d, i);
+      if (own < 90 || own - lum(d, nb[4]) < 40 || (S.warm && !(d[i] > d[i + 2] + 40 && d[i] > 140)) || (S.cool && !(d[i + 2] >= d[i] && d[i + 2] >= d[i + 1]))) continue;
+      const bg = [0, 1, 2].map(k => Math.round(avg(nb.slice(0, 4).map(n => d[n + k]))));
+      S.twinkles.push({ x, y, bg: rgb(bg), lake: y > 85, f: 0.6 + Math.random() * 2, p: Math.random() * 7 });
+    }
+  }
+}
+const artAt = (d, x, y) => { const i = (y * W + x) * 4; return [d[i], d[i + 1], d[i + 2]]; };
+// the room for the current light and candle: the lit room, the lamp-off room for the sky (or the lit one dimmed by
+// guess); with the candle out the flame and its glow give way to the wall beside them
+function buildRoom() {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const k = lightNow(), cx = c.getContext('2d'); cx.drawImage(ART.lights[k] ? ART.lights[k].img : ART.room, 0, 0);
+  if (!ART.d || (ST.candle && k !== 'guess')) return c;
+  const img = cx.getImageData(0, 0, W, H), d = img.data;
+  if (k === 'guess') for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!glass[y * W + x]) unlitGuess(d, (y * W + x) * 4, x, y);
+  if (!ST.candle) for (let y = 68; y < 84; y++) {
+    const wall = artAt(d, 355, y);
+    for (let x = 334; x < 351; x++) { const i = (y * W + x) * 4; d[i] = wall[0]; d[i + 1] = wall[1]; d[i + 2] = wall[2]; }
+  }
+  cx.putImageData(img, 0, 0);
+  return c;
+}
+// lamp light as an additive layer for the beat swell: dithered alpha steps keep the pixel grain, and the glass stays dark
+function buildGlow() {
+  const b = new Buf(W, H), warm = hex('#ffc070');
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (glass[y * W + x]) continue;
+    const v = lampFall(x, y) * 4, i = Math.floor(v);
+    const lv = Math.min(4, v - i > BAYER[(y & 3) * 4 + (x & 3)] ? i + 1 : i);
+    if (lv > 0) b.set(x, y, pack(warm, lv * 48));
+  }
+  return b.flush();
+}
+// lightning lights the room from the window: cool light in dithered steps, strongest round the window, none on the glass
+function buildFlashLight() {
+  const b = new Buf(W, H), c = hex('#c4d0ff');
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (glass[y * W + x]) continue;
+    const dx = (x - 192) / 115, dy = (y - 70) / 70, v = Math.exp(-(dx * dx + dy * dy) / 2) * 4, i = Math.floor(v);
+    const lv = Math.min(4, v - i > BAYER[(y & 3) * 4 + (x & 3)] ? i + 1 : i);
+    if (lv > 0) b.set(x, y, pack(c, lv * 48));
+  }
+  return b.flush();
+}
+// a bolt: a jagged path from the clouds down toward the ridge, with two short branches, as core pixels and a dimmer glow
+function makeBolt() {
+  const walk = (x, y, steps, drift) => { const p = []; for (let k = 0; k < steps; k++) { p.push([x, y]); x += (Math.random() - 0.5) * 3 + drift; y += 2 + Math.random() * 2; } return p; };
+  const main = walk(140 + Math.random() * 110, 20, 12 + Math.floor(Math.random() * 6), (Math.random() - 0.5) * 0.8);
+  const paths = [main];
+  for (let k = 0; k < 2; k++) { const [x, y] = main[2 + Math.floor(Math.random() * (main.length - 4))]; paths.push(walk(x, y, 3 + Math.floor(Math.random() * 4), (Math.random() < 0.5 ? -1 : 1) * 1.2)); }
+  const out = [];
+  for (const p of paths) for (let k = 0; k + 1 < p.length; k++) {
+    const [ax, ay] = p[k], [bx, by] = p[k + 1], n = Math.max(1, Math.round(Math.max(Math.abs(bx - ax), Math.abs(by - ay))));
+    for (let j = 0; j <= n; j++) {
+      const x = Math.round(ax + (bx - ax) * j / n), y = Math.round(ay + (by - ay) * j / n);
+      out.push([x - 1, y, false], [x + 1, y, false], [x, y, true]);
+    }
+  }
+  return out;
+}
+// a strike's brightness over time: a sharp flash and a fainter second one; gentler for people who ask for less motion
+const CALM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const flashAt = t => t < 0 || t > 1.2 ? 0 : Math.max(Math.exp(-t / 0.07), !CALM && t > 0.22 ? 0.65 * Math.exp(-(t - 0.22) / 0.09) : 0) * (CALM ? 0.35 : 1);
+// the reels turn by redrawing a disc of the picture rotated, one frame per 5 degrees
+const REELS = [[287, 121], [332, 121]], REEL_R = 15, REEL_N = 72;
+let reelFrames = [];   // cut from the lit room; each lamp-off light cuts its own (ART.lights[k].reels)
+function buildReels() {
+  if (!ART.d) return;
+  reelFrames = reelsOf(ART.d);
+  for (const Lt of Object.values(ART.lights)) Lt.reels = reelsOf(Lt.d);
+}
+const reelsIn = k => (ART.lights[k] && ART.lights[k].reels) || reelFrames;
+function reelsOf(d) {
+  const S = 2 * REEL_R + 1;
+  return REELS.map(([cx, cy]) => Array.from({ length: REEL_N }, (_, k) => {
+    const b = new Buf(S, S), a = k / REEL_N * 2 * Math.PI, c = Math.cos(a), s = Math.sin(a);
+    for (let dy = -REEL_R; dy <= REEL_R; dy++) for (let dx = -REEL_R; dx <= REEL_R; dx++) {
+      if (dx * dx + dy * dy > REEL_R * REEL_R + REEL_R) continue;
+      const i = (Math.round(cy + dx * s + dy * c) * W + Math.round(cx + dx * c - dy * s)) * 4;
+      b.set(dx + REEL_R, dy + REEL_R, pack([d[i], d[i + 1], d[i + 2]]));
+    }
+    return b.flush();
+  }));
+}
+// the tape deck's meters: two rows of six LEDs (four green, amber, red), the low and the high half of the spectrum
+const LEDS = { x: 304, rows: [154, 157], on: ['#7ce08a', '#7ce08a', '#7ce08a', '#7ce08a', '#ffc04e', '#ff5a44'], off: ['#173020', '#173020', '#173020', '#173020', '#3a2a12', '#3a1612'] };
+
+/* ---------- the cats ----------
+   Cut from the picture, so the room plus every sprite at its rest position is the picture again. Bodies hold a few
+   hidden rows of neck under each head; "-in" bodies are the in-breath frame (chest one row up); the Sphynx's flick
+   heads fold one ear tip down. Heads are drawn at screen resolution, so a nod or a breath can move them by part of a pixel. */
+const SPR = {};          // name -> { cv, x, y, w, h }: the sprite at rest, and its copies in each lamp-off light once needed (dark)
+const catAt = new Uint8Array(W * H);   // which cat is under a scene pixel at rest: 1 Devon, 2 Sphynx (a pixel of slack around each)
+function buildCats(meta) {
+  for (const [name, s] of Object.entries(meta.sprites)) {
+    const [sx, sy, w, h] = s.sheet, cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(ART.sheet, sx, sy, w, h, 0, 0, w, h);
+    SPR[name] = { cv, x: s.at[0], y: s.at[1], w, h, dark: {} };
+  }
+  for (const [name, id] of [['devon-body', 1], ['devon-tail', 1], ['devon-head', 1], ['sph-body', 2], ['sph-head', 2]]) {
+    const s = SPR[name]; let a;
+    try { a = s.cv.getContext('2d').getImageData(0, 0, s.w, s.h).data; } catch (e) { return; }
+    for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (a[(y * s.w + x) * 4 + 3])
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+        const X = s.x + x + k, Y = s.y + y + j;
+        if (X >= 0 && X < W && Y >= 0 && Y < H && !catAt[Y * W + X]) catAt[Y * W + X] = id;
+      }
+  }
+}
+// a sprite canvas in light k (see lightNow); `fix` edits its pixels first (eyes, mouth) given the sprite's top-left
+function litCanvas(src, ox, oy, k, fix) {
+  const cv = document.createElement('canvas'); cv.width = src.width; cv.height = src.height;
+  const cx = cv.getContext('2d'); cx.drawImage(src, 0, 0);
+  if (!fix && k === 'lit') return cv;
+  let img;
+  try { img = cx.getImageData(0, 0, cv.width, cv.height); } catch (e) { return cv; }
+  const d = img.data;
+  if (fix) fix(d, cv.width, ox, oy);
+  if (k !== 'lit') for (let y = 0; y < cv.height; y++) for (let x = 0; x < cv.width; x++) { const i = (y * cv.width + x) * 4; if (d[i + 3]) relit(d, i, ox + x, oy + y, k); }
+  cx.putImageData(img, 0, 0);
+  return cv;
+}
+const lit = (name, k) => { const s = SPR[name]; return k === 'lit' ? s.cv : (s.dark[k] || (s.dark[k] = litCanvas(s.cv, s.x, s.y, k))); };
+// faces in scene pixels (rest pose). Each eye is a box of `h` rows at x, FACE.y; `inner` is the box's iris and pupil
+// (columns, rows). `closed`/`half` name the rows of fur or skin copied into the box, `lid` the cells of the lid line.
+const FACES = {
+  devon: { eyes: [138, 148], y: 64, h: 3, inner: [1, 3, 0, 2], lidC: '#5d4941',
+    closed: { fill: [67, 67, 67], lid: [[0, 1], [1, 2], [2, 2], [3, 2], [4, 1]] },
+    mouth: [[144, 71, '#3a2420'], [145, 71, '#3a2420'], [144, 72, '#c87a78']] },
+  sph: { eyes: [209, 221], y: 124, h: 4, inner: [1, 3, 1, 3], lidC: '#2b1e1c',
+    closed: { fill: [123, 123, 128, 128], lid: [[0, 1], [1, 2], [2, 2], [3, 2], [4, 1]] },
+    half: { fill: [123, 123], lid: [[1, 1], [2, 1], [3, 1]] },
+    mouth: [[215, 133, '#28120f'], [216, 133, '#28120f'], [217, 133, '#28120f'], [215, 134, '#28120f'], [216, 134, '#b86a6a'], [217, 134, '#28120f']] }
+};
+// the pupils look lx, ly (-1..1): inside each eye the pupil cells move lx columns, and looking up or down leaves the
+// pupil in its top or bottom row only. Cells the pupil leaves take the iris colour beside them in the same row.
+function gaze(d, w, ox, oy, F, lx, ly) {
+  const [c0, c1, r0, r1] = F.inner, at = (x, y) => ((F.y + y - oy) * w + x - ox) * 4;
+  for (const ex of F.eyes) {
+    const cells = [];
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) { const i = at(ex + c, r); cells.push({ c, r, i, rgb: [d[i], d[i + 1], d[i + 2]], pupil: lum(d, i) < 30 }); }
+    const cell = (c, r) => cells.find(q => q.c === c && q.r === r);
+    const pupil = cells.filter(q => q.pupil);
+    if (!pupil.length) continue;
+    const ink = pupil.reduce((a, q) => lum(d, q.i) < lum(d, a.i) ? q : a).rgb;
+    let next = pupil.map(q => cell(clamp(q.c + lx, c0, c1), q.r));
+    if (ly) { const rows = next.map(q => q.r), keep = ly < 0 ? Math.min(...rows) : Math.max(...rows); if (new Set(rows).size > 1) next = next.filter(q => q.r === keep); }
+    for (const q of cells) {
+      if (next.includes(q)) { d[q.i] = ink[0]; d[q.i + 1] = ink[1]; d[q.i + 2] = ink[2]; }
+      else if (q.pupil) {
+        const iris = cells.filter(o => o.r === q.r && !o.pupil).sort((a, b) => Math.abs(a.c - q.c) - Math.abs(b.c - q.c))[0]
+          || cells.filter(o => o.c === q.c && !o.pupil).sort((a, b) => Math.abs(a.r - q.r) - Math.abs(b.r - q.r))[0];
+        if (iris) { d[q.i] = iris.rgb[0]; d[q.i + 1] = iris.rgb[1]; d[q.i + 2] = iris.rgb[2]; }
+      }
+    }
+  }
+}
+// eyes closed or half closed: rows of fur or skin copied into each eye box, then the lid line
+function shut(d, w, ox, oy, F, S) {
+  const lid = hex(F.lidC);
+  for (const ex of F.eyes) {
+    S.fill.forEach((row, dy) => { for (let dx = 0; dx < 5; dx++) { const s = ((row - oy) * w + ex + dx - ox) * 4, t = ((F.y + dy - oy) * w + ex + dx - ox) * 4; for (let k = 0; k < 3; k++) d[t + k] = d[s + k]; } });
+    for (const [dx, dy] of S.lid) { const t = ((F.y + dy - oy) * w + ex + dx - ox) * 4; d[t] = lid[0]; d[t + 1] = lid[1]; d[t + 2] = lid[2]; }
+  }
+}
+// heads are built on first use and kept, keyed by cat | eyes | mouth | ear flick | look | light
+const heads = {};
+function catHead(cat, eyes, mouth, flick, lx, ly, light) {
+  const key = [cat, eyes, mouth ? 1 : 0, flick, lx, ly, light].join('|');
+  if (heads[key]) return heads[key];
+  const s = SPR[cat + '-head' + (flick ? '-flick-' + flick : '')], F = FACES[cat];
+  return (heads[key] = litCanvas(s.cv, s.x, s.y, light, (d, w, ox, oy) => {
+    if (eyes === 'open') { if (lx || ly) gaze(d, w, ox, oy, F, lx, ly); }
+    else shut(d, w, ox, oy, F, F[eyes]);
+    if (mouth) for (const [x, y, c] of F.mouth) { const t = ((y - oy) * w + x - ox) * 4, v = hex(c); d[t] = v[0]; d[t + 1] = v[1]; d[t + 2] = v[2]; }
+  }));
+}
+// the Devon's tail hangs from the sill and sways from its tip: the top rows stay put, each row below moves a little more
+const TAIL_FIXED = 4, TAIL_SWAY = 2.5;
+function drawTail(ph, light) {
+  const s = SPR['devon-tail'], cv = lit('devon-tail', light);
+  for (let r = 0; r < s.h; r++) {
+    const u = Math.max(0, (r - TAIL_FIXED) / (s.h - 1 - TAIL_FIXED)), dx = Math.round(TAIL_SWAY * u ** 1.6 * Math.sin(ph - 1.2 * u));
+    g.drawImage(cv, 0, r, s.w, 1, s.x + dx, s.y + r, s.w, 1);
+  }
+}
+
+/* =====================================================================
    RENDER LOOP
    ===================================================================== */
 const low = document.createElement('canvas'); low.width = W; low.height = H;
 const g = low.getContext('2d');
 const screen = $('screen'), sc = screen.getContext('2d');
 let view = { s: 1, ox: 0, oy: 0 };
-// narrow screens: keep the window, curtains and both cats in frame, extend the room up and down
-const CROP_X = 76, CROP_W = 176;
-let ext = null;
+// both cats stay in frame on any screen (x 112-244). A narrow screen fits that width, and the wall above
+// and the desk below run on to fill its height.
+const CATS_X0 = 112, CATS_X1 = 244;
 function resize() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  screen.width = Math.round(innerWidth * dpr); screen.height = Math.round(innerHeight * dpr);
-  if (screen.width / screen.height < CROP_W / H) {
-    const s = screen.width / CROP_W, avail = Math.ceil(screen.height / s) - H;
-    const T = Math.round(avail * 0.35), B = avail - T + 2;
-    if (!ext || ext.T !== T || ext.B !== B) ext = { T, B, top: buildExtTop(T), bot: buildExtBottom(B) };
-    view = { s, ox: -CROP_X * s, oy: T * s, ext };
-  } else {
-    const s = Math.max(screen.width / W, screen.height / H);
-    const ox = clamp(screen.width / 2 - 164 * s, screen.width - W * s, 0), oy = (screen.height - H * s) / 2;
-    view = { s, ox, oy, ext: null };
-  }
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), sw = Math.round(innerWidth * dpr), sh = Math.round(innerHeight * dpr);
+  screen.width = sw; screen.height = sh;
+  const s = Math.min(Math.max(sw / W, sh / H), sw / (CATS_X1 - CATS_X0)), vw = sw / s;
+  const fx = clamp(W / 2, CATS_X1 - vw / 2, CATS_X0 + vw / 2);
+  view = { s, ox: clamp(sw / 2 - fx * s, sw - W * s, 0), oy: (sh - H * s) / 2 };
   sc.imageSmoothingEnabled = false;
 }
 addEventListener('resize', resize);
 // screen point -> scene pixel
 function toScene(cx, cy) { const dpr = Math.min(window.devicePixelRatio || 1, 2); return [(cx * dpr - view.ox) / view.s, (cy * dpr - view.oy) / view.s]; }
 // props that answer a click: id, then x, y, w, h in scene pixels
-const SPOTS = [['mug', 90, 128, 15, 20], ['candle', 208, 108, 13, 26], ['deck', 240, 106, 58, 31], ['lamp', 29, 80, 30, 57], ['window', 104, 20, 121, 87]];
+const SPOTS = [['mug', 144, 140, 34, 32], ['candle', 333, 70, 25, 28], ['deck', 259, 98, 102, 72], ['lamp', 16, 72, 57, 47], ['lamp', 30, 119, 26, 45], ['window', 126, 10, 136, 108]];
 // what is under a screen point: a cat first (they sit in front of the window), then a prop, else null
 function hitAt(cx, cy) {
-  const [x, y] = toScene(cx, cy), D = cats.devon, S = cats.sph;
-  if (x >= S.cx - 21 && x <= S.cx + 20 && y >= S.by - 50 && y <= S.by) return 'sph';
-  if (x >= D.cx - 14 && x <= D.cx + 14 && y >= D.by - 36 && y <= D.by + 1) return 'devon';
-  for (const [id, sx, sy, w, h] of SPOTS) if (x >= sx && x < sx + w && y >= sy && y < sy + h) return id;
+  const [x, y] = toScene(cx, cy), c = x >= 0 && x < W && y >= 0 && y < H ? catAt[(y | 0) * W + (x | 0)] : 0;
+  if (c) return c === 1 ? 'devon' : 'sph';
+  for (const [id, ...b] of SPOTS) if (inBox(x, y, b)) return id;
   return null;
 }
 screen.addEventListener('pointermove', e => { screen.style.cursor = hitAt(e.clientX, e.clientY) ? 'pointer' : ''; });
-// scrolling over the boombox turns the volume
+// scrolling over the tape deck turns the volume
 screen.addEventListener('wheel', e => {
   if (hitAt(e.clientX, e.clientY) !== 'deck') return;
   e.preventDefault(); setVol(clamp(ST.vol - Math.sign(e.deltaY) * 0.04, 0, 1)); $('vol').value = ST.vol; poke();
@@ -2079,54 +1766,65 @@ screen.addEventListener('pointerleave', release(false));
 screen.addEventListener('pointercancel', release(false));
 
 let roomCv = null, glowCv = null;
-let roomPrev = null, roomFade = 1, roomFadeT = 0.2;   // the room before the last light switch, and how far the fade to the new one has come
-// bodies are [rest, inhale]; heads are built on first use and kept, keyed by cat | eyes | mouth | ear flick | look
-const CAT = { devonBody: null, sphBody: null, heads: {} };
-function catHead(cat, eyes, mouth, flick, lx, ly) {
-  const key = [cat, eyes, mouth ? 1 : 0, flick, lx, ly].join('|');
-  return CAT.heads[key] || (CAT.heads[key] = cat === 'devon' ? devonHead(eyes, mouth, lx, ly) : sphynxHead(eyes, mouth, flick, lx, ly));
-}
-// per cat: bph/bper/br = breath phase, period (s) and level 0..1; lx, ly = where the pupils point; lw, lag = gaze reaction timer
+let roomPrev = null, roomFade = 1, roomFadeT = 0.2, lightWas = 'lit';   // the room before the last change of light, its light, and how far the fade to the new one has come
+// per cat: bph/bper/br = breath phase, period (s) and level 0..1; lx, ly = where the pupils point; lw, lag = gaze reaction
+// timer; eye = the middle of its eyes in scene pixels
 const cats = {
-  devon: { cx: 126, by: 110, blink: 0, nextBlink: 2, nod: 0, doze: 0, mouth: 0, bph: 0, bper: 3.1, br: 0, lx: 0, ly: 0, lw: 0, lag: 0.2 },
-  sph: { cx: 172, by: 148, blink: 0, nextBlink: 3, sleepy: 0, nextSleepy: 14, twitch: 0, nextTwitch: 5, doze: 0, purrSleepy: false, mouth: 0, groove: false, tap: 0, ear: 0, earSide: 'R', bph: 0.4, bper: 3.7, br: 0, lx: 0, ly: 0, lw: 0, lag: 0.3 },
+  devon: { blink: 0, nextBlink: 2, nod: 0, doze: 0, mouth: 0, bph: 0, bper: 3.1, br: 0, lx: 0, ly: 0, lw: 0, lag: 0.2, eye: [145, 65] },
+  sph: { blink: 0, nextBlink: 3, sleepy: 0, nextSleepy: 14, doze: 0, purrSleepy: false, mouth: 0, groove: false, tap: 0, ear: 0, earSide: 'r', bph: 0.4, bper: 3.7, br: 0, lx: 0, ly: 0, lw: 0, lag: 0.3, eye: [217, 125.5] },
   nextTalk: 120 + Math.random() * 180
 };
 const BREATH = 0.5;   // how far a full breath lifts a head, in scene pixels
 // a cat's gaze: toward the pointer while it has moved in the last few seconds, else straight ahead, after a short reaction time
-function look(c, ex, ey, dt) {
-  const dx = ptr.x - ex, dy = ptr.y - ey, d = Math.hypot(dx, dy);
+function look(c, dt) {
+  const dx = ptr.x - c.eye[0], dy = ptr.y - c.eye[1], d = Math.hypot(dx, dy);
   let lx = 0, ly = 0;
   if (time - ptr.t < 4 && !(c.doze > 0) && (Math.abs(dx) > 12 || Math.abs(dy) > 8)) { lx = Math.abs(dx) > 0.38 * d ? Math.sign(dx) : 0; ly = Math.abs(dy) > 0.6 * d ? Math.sign(dy) : 0; }
   if (lx === c.lx && ly === c.ly) c.lw = 0;
   else if ((c.lw += dt) > c.lag) { c.lx = lx; c.ly = ly; c.lw = 0; c.lag = 0.1 + Math.random() * 0.3; }
 }
-let rainDrops = [], glassDrops = [], ripples = [], steam = [], motes = [], waves = [], shoot = null, nextShoot = 20;
+let rainDrops = [], glassDrops = [], ripples = [], flakes = [], steam = [], motes = [], shoot = null, nextShoot = 20;
 let reelA = 0, swayPh = 0, time = 0, steamT = 0;
 let ffwd = 0, flare = 0;   // reel whirl after a skip, flame flare after relighting; both decay from 1
+let strikeT = -99, nextStrike = 3, bolt = null, thunderAt = 0, thunderNear = false, flashCv = null;   // lightning
 function spawnRain() {
   rainDrops = []; glassDrops = [];
-  if (!ST.rain) return;
-  for (let i = 0; i < 140; i++) rainDrops.push({ x: 90 + Math.random() * 150, y: 10 + Math.random() * 100, s: 120 + Math.random() * 60 });
-  for (let i = 0; i < 34; i++) glassDrops.push({ x: 99 + Math.floor(Math.random() * 131), y: 21 + Math.random() * 84, v: 0, t: Math.random() * 6 });
+  if (!ST.rain && !ST.storm) return;
+  for (let i = 0; i < (ST.storm ? 230 : 140); i++) rainDrops.push({ x: 100 + Math.random() * 160, y: 10 + Math.random() * 108, s: (ST.storm ? 165 : 120) + Math.random() * 60 });
+  for (let i = 0; i < (ST.storm ? 60 : 40); i++) glassDrops.push({ x: 131 + Math.floor(Math.random() * 127), y: 14 + Math.random() * 102, v: 0, t: Math.random() * 6 });
 }
-for (let i = 0; i < 12; i++) motes.push({ x: 22 + Math.random() * 60, y: 92 + Math.random() * 40, p: Math.random() * 7 });
+// autumn: leaves tumble down past the window while the autumn view shows, each flipping between edge-on and flat
+const leaves = Array.from({ length: 24 }, (_, i) => ({ x: 108 + Math.random() * 168, y: 6 + Math.random() * 116, v: 6 + Math.random() * 7, p: Math.random() * 7,
+  w: 0.8 + Math.random() * 1.2, spin: 2 + Math.random() * 4, c: ['#e8a33a', '#d9772a', '#c4452c', '#f0c65a', '#9c5a2c'][i % 5] }));
+// fog banks drifting past the window: a strip of soft noise in a few dithered alpha steps (the pixel grain stays),
+// denser low down where fog lies on the water. The pattern repeats every two view-widths, so the strip can scroll
+// for ever; it is one view-width longer than that, so any window into it is whole.
+let fogCv = null;
+function buildFog(w, h) {
+  const P = 2 * w, b = new Buf(P + w, h), c = hex('#cdd3de');
+  const hash = (i, j, n) => { const s = Math.sin((((i % n) + n) % n) * 127.1 + j * 311.7) * 43758.5453; return s - Math.floor(s); };
+  const noise = (x, y, n) => {
+    const i = Math.floor(x), j = Math.floor(y), u = (x - i) * (x - i) * (3 - 2 * (x - i)), v = (y - j) * (y - j) * (3 - 2 * (y - j));
+    const a = hash(i, j, n), b2 = hash(i + 1, j, n), c2 = hash(i, j + 1, n), d2 = hash(i + 1, j + 1, n);
+    return a + (b2 - a) * u + (c2 - a) * v + (a - b2 - c2 + d2) * u * v;
+  };
+  for (let y = 0; y < h; y++) for (let x = 0; x < P + w; x++) {
+    const X = x % P, d = (0.7 * noise(X / 24, y / 9, P / 24) + 0.3 * noise(X / 8, y / 4, P / 8)) * (0.45 + 0.75 * y / h);
+    const v = clamp((d - 0.25) * 5, 0, 4), i = Math.floor(v), lv = Math.min(4, v - i > BAYER[(y & 3) * 4 + (x & 3)] ? i + 1 : i);
+    if (lv > 0) b.set(x, y, pack(c, lv * 44));
+  }
+  return b.flush();
+}
+// snow: flakes drift down past the window, each swaying at its own pace; a few nearer ones are bigger and faster
+function spawnSnow() {
+  flakes = [];
+  if (!ST.snow) return;
+  for (let i = 0; i < 110; i++) flakes.push({ x: 108 + Math.random() * 168, y: 6 + Math.random() * 116, v: 5 + Math.random() * 9, p: Math.random() * 7, w: 0.6 + Math.random() * 1.4, near: Math.random() < 0.15 });
+}
+for (let i = 0; i < 14; i++) motes.push({ x: 12 + Math.random() * 72, y: 75 + Math.random() * 70, p: Math.random() * 7 });
 
 function px(x, y, c, a = 1) { g.globalAlpha = a; g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), 1, 1); }
 function rectA(x, y, w, h, c, a) { g.globalAlpha = a; g.fillStyle = c; g.fillRect(x, y, w, h); }
-function ellA(cx, cy, rx, ry, c, a) {
-  g.globalAlpha = a; g.fillStyle = c;
-  for (let y = Math.ceil(cy - ry); y <= cy + ry; y++) { const w = Math.floor(rx * Math.sqrt(Math.max(0, 1 - ((y - cy) / ry) ** 2))); g.fillRect(Math.round(cx - w), y, w * 2 + 1, 1); }
-}
-function chain(x, y, a0, curl, n, len, wob, thick, light, dark) {
-  const pts = []; let a = a0;
-  for (let i = 0; i < n; i++) { pts.push([x, y]); a += curl + wob(i); x += Math.cos(a) * len; y += Math.sin(a) * len; }
-  g.globalAlpha = 1;
-  g.fillStyle = dark;
-  pts.forEach(([x, y], i) => { const t = i > n - 4 ? thick - 1 : thick; g.fillRect(Math.round(x) - 1, Math.round(y) - 1, t + 2, t + 2); });
-  g.fillStyle = light;
-  pts.forEach(([x, y], i) => { const t = i > n - 4 ? thick - 1 : thick; g.fillRect(Math.round(x), Math.round(y), t, t); });
-}
 
 // one heard event -> state. `late` events (the tab was hidden) keep the clock right but move nothing.
 function beatEvent(e, late) {
@@ -2140,15 +1838,10 @@ function beatEvent(e, late) {
   } else if (e.k === 'snare') {
     BEAT.snare = Math.max(BEAT.snare, e.v);
     if (e.v < 0.5) return;
-    // the Sphynx keeps the backbeat for a few bars at a time (head dips, tail tip lifts), and now and then an ear answers
+    // the Sphynx keeps the backbeat for a few bars at a time (its head dips), and now and then an ear answers
     if (S.groove && !(S.doze > 0) && !(S.sleepy > 0)) S.tap = 1;
-    if (S.ear === 0 && Math.random() < 0.35 * ST.beat) { S.ear = 0.15; S.earSide = Math.random() < 0.5 ? 'L' : 'R'; }
-  } else if (e.k === 'hat') {
-    if (bulbs.length && Math.random() < 0.5 * ST.beat) bulbs[Math.floor(Math.random() * bulbs.length)].s = 1;
-  } else if (e.k === 'chord') {
-    BEAT.chord = 1;
-    if (waves.length < 4) waves.push({ a: 0 });
-  }
+    if (S.ear === 0 && Math.random() < 0.35 * ST.beat) { S.ear = 0.15; S.earSide = Math.random() < 0.5 ? 'l' : 'r'; }
+  } else if (e.k === 'chord') BEAT.chord = 1;
 }
 
 function update(dt) {
@@ -2167,11 +1860,9 @@ function update(dt) {
   BEAT.kick *= Math.exp(-dt * 9); BEAT.snare *= Math.exp(-dt * 9); BEAT.chord *= Math.exp(-dt * 1.6);
   // the lamp follows kick and chord with a soft attack and a slower release, a swell and not a flash
   { const tgt = 0.5 * BEAT.kick + 0.5 * BEAT.chord; BEAT.glow += (tgt - BEAT.glow) * Math.min(1, dt * (tgt > BEAT.glow ? 30 : 5)); }
-  for (const b of bulbs) b.s = Math.max(0, b.s - dt * 6);
-  waves.forEach(w => w.a += dt * 1.1); waves = waves.filter(w => w.a < 1);
   const D = cats.devon, S = cats.sph;
   S.tap = Math.max(0, S.tap - dt * 4); S.ear = Math.max(0, S.ear - dt);
-  // Devon's tail sways once per bar while the music plays, drifting into step instead of jumping
+  // the Devon's tail sways once per bar while the music plays, drifting into step instead of jumping
   { const locked = playing && ST.beat > 0 && BEAT.barDur > 0;
     swayPh += dt * (locked ? 2 * Math.PI / BEAT.barDur : 1.5);
     if (locked) { let err = (2 * Math.PI * BEAT.pos - swayPh) % (2 * Math.PI); if (err > Math.PI) err -= 2 * Math.PI; else if (err < -Math.PI) err += 2 * Math.PI; swayPh += err * Math.min(1, dt * 3); } }
@@ -2182,7 +1873,7 @@ function update(dt) {
     const t = c.bph < 0.35 ? c.bph / 0.35 : c.bph < 0.85 ? 1 - (c.bph - 0.35) / 0.5 : 0;
     c.br = t * t * (3 - 2 * t);
   }
-  look(D, D.cx, D.by - 20.5, dt); look(S, S.cx - 7, S.by - 34.5, dt);
+  look(D, dt); look(S, dt);
   for (const c of [D, S]) { if (time > c.nextBlink) { c.blink = 0.14; c.nextBlink = time + 2.5 + Math.random() * 5; } c.blink = Math.max(0, c.blink - dt); }
   if (time > S.nextSleepy) { S.sleepy = 4 + Math.random() * 6; S.nextSleepy = time + S.sleepy + 12 + Math.random() * 20; S.purrSleepy = Math.random() < 0.7; }
   S.sleepy = Math.max(0, S.sleepy - dt);
@@ -2193,8 +1884,6 @@ function update(dt) {
   if (D.doze > 0) purrStart('devon'); else purrStop('devon');
   if (S.doze > 0 || (S.sleepy > 0 && S.purrSleepy)) purrStart('sph'); else purrStop('sph');
   purrTick();
-  if (time > S.nextTwitch) { S.twitch = 0.9; S.nextTwitch = time + 3 + Math.random() * 7; }
-  S.twitch = Math.max(0, S.twitch - dt);
   // reels turn with the tempo (3.24 s is a bar at 74 bpm) and wind down with a tape stop
   if (playing) reelA += dt * 3.2 * BEAT.rate * (BEAT.barDur ? 3.24 / BEAT.barDur : 1) * (1 + 7 * ffwd);
   ffwd = Math.max(0, ffwd - dt * 1.6); flare = Math.max(0, flare - dt * 4);
@@ -2210,141 +1899,174 @@ function update(dt) {
       BEAT.spec[i] += (v - BEAT.spec[i]) * (v > BEAT.spec[i] ? 0.6 : 0.14);
     }
   }
-  for (const c of OUT.clouds) { c.x += c.v * dt; if (c.x > 240) c.x = 90 - c.w; }
-  for (const d of rainDrops) { d.y += d.s * dt; d.x += d.s * dt * 0.22; if (d.y > 108) { d.y = 12 - Math.random() * 20; d.x = 84 + Math.random() * 150; } }
+  for (const d of rainDrops) { d.y += d.s * dt; d.x += d.s * dt * (ST.storm ? 0.4 : 0.22); if (d.y > 118) { d.y = 12 - Math.random() * 20; d.x = (ST.storm ? 80 : 112) + Math.random() * 160; } }
   for (const d of glassDrops) {
     d.t -= dt;
     if (d.t <= 0) { if (d.v) { d.v = 0; d.t = 1 + Math.random() * 6; } else { d.v = 8 + Math.random() * 22; d.t = 0.3 + Math.random() * 1.2; } }
     d.y += d.v * dt;
-    if (d.y > 105) { d.y = 21 + Math.random() * 20; d.x = 99 + Math.floor(Math.random() * 131); }
+    if (d.y > 116) { d.y = 14 + Math.random() * 20; d.x = 131 + Math.floor(Math.random() * 127); }
   }
-  if (ST.rain && Math.random() < dt * 9) ripples.push({ x: 100 + Math.random() * 128, y: HZ + 2 + Math.floor(Math.random() * 20), a: 0 });
+  if (sky === 'autumn' || skyPrev === 'autumn') for (const l of leaves) {
+    l.y += l.v * dt; l.x += (Math.sin(time * l.w + l.p) * 6 + 2) * dt;
+    if (l.y > 122 || l.x > 278) { l.y = 6 - Math.random() * 8; l.x = 100 + Math.random() * 168; }
+  }
+  for (const f of flakes) {
+    f.y += f.v * (f.near ? 1.6 : 1) * dt; f.x += Math.sin(time * f.w + f.p) * dt * (f.near ? 5 : 3);
+    if (f.y > 122) { f.y = 6 - Math.random() * 6; f.x = 108 + Math.random() * 168; }
+  }
+  // lightning: a strike every few seconds in a storm, its thunder a moment later (sooner and sharper when close)
+  if (ST.storm && (nextStrike -= dt) <= 0) {
+    thunderNear = Math.random() < 0.4; strikeT = time; nextStrike = 5 + Math.random() * 12;
+    bolt = thunderNear || Math.random() < 0.5 ? makeBolt() : null;
+    thunderAt = time + (thunderNear ? 0.15 + Math.random() * 0.4 : 1 + Math.random() * 2.5);
+  }
+  if (thunderAt && time >= thunderAt) { thunder(thunderNear); thunderAt = 0; }
+  if ((ST.rain || ST.storm) && Math.random() < dt * (ST.storm ? 16 : 9)) ripples.push({ x: 200 + Math.random() * 56, y: 96 + Math.floor(Math.random() * 20), a: 0 });
   ripples.forEach(r => r.a += dt); ripples = ripples.filter(r => r.a < 0.6);
-  for (const f of OUT.flies) {
-    f.vx += (Math.random() - 0.5) * dt * 14; f.vy += (Math.random() - 0.5) * dt * 10;
-    f.vx *= 0.97; f.vy *= 0.97; f.x += f.vx * dt; f.y += f.vy * dt;
-    if (f.x < 100 || f.x > 228) f.vx *= -1; if (f.y < 66 || f.y > 103) f.vy *= -1;
-  }
   steamT -= dt;
-  if (steamT <= 0) { steam.push({ x: 95.5 + Math.random() * 3, y: 135, a: 0, p: Math.random() * 6 }); steamT = 0.35; }
+  if (steamT <= 0) { steam.push({ x: 156 + Math.random() * 4, y: 142, a: 0, p: Math.random() * 6 }); steamT = 0.35; }
   steam.forEach(s => { s.a += dt; s.y -= dt * (s.v || 5); }); steam = steam.filter(s => s.a < 3.4);
-  for (const m of motes) { m.y -= dt * (0.6 + Math.sin(time * 0.3 + m.p) * 0.6); m.x += Math.sin(time * 0.4 + m.p * 3) * dt * 1.5; if (m.y < 86) { m.y = 134; m.x = 22 + Math.random() * 60; } }
-  if (!OUT.rain && OUT.t > 0.6) {
+  for (const m of motes) { m.y -= dt * (0.6 + Math.sin(time * 0.3 + m.p) * 0.6); m.x += Math.sin(time * 0.4 + m.p * 3) * dt * 1.5; if (m.y < 70) { m.y = 150; m.x = 12 + Math.random() * 72; } }
+  if (skyFade < 1) skyFade = Math.min(1, skyFade + dt / 1.2);
+  if (!ST.rain && ART.skies[sky] && ART.skies[sky].stars) {
     nextShoot -= dt;
-    if (nextShoot <= 0 && !shoot) { shoot = { x: 140 + Math.random() * 80, y: 22 + Math.random() * 16, a: 0 }; nextShoot = 25 + Math.random() * 50; }
+    if (nextShoot <= 0 && !shoot) { shoot = { x: 150 + Math.random() * 100, y: 16 + Math.random() * 16, a: 0 }; nextShoot = 25 + Math.random() * 50; }
   }
   if (shoot) { shoot.a += dt; shoot.x -= dt * 70; shoot.y += dt * 24; if (shoot.a > 0.55) shoot = null; }
 }
 
 function draw() {
   g.globalAlpha = 1; g.clearRect(0, 0, W, H);
-  g.drawImage(skyBuf.cv, 0, 0);
-  // stars
-  const sv = OUT.rain ? 0 : clamp((OUT.t - 0.3) / 0.5, 0, 1);
-  if (sv > 0) for (const s of stars) {
-    if (OUT.moon && Math.hypot(s.x - OUT.moon.x, s.y - OUT.moon.y) < 9) continue;
-    const a = sv * s.b * (0.6 + 0.4 * Math.sin(time * s.f + s.p));
-    px(s.x, s.y, '#fff6e0', a);
-    if (s.big) { px(s.x - 1, s.y, '#fff6e0', a * 0.35); px(s.x + 1, s.y, '#fff6e0', a * 0.35); px(s.x, s.y - 1, '#fff6e0', a * 0.35); px(s.x, s.y + 1, '#fff6e0', a * 0.35); }
+  // the view outside comes first, fading over from the last sky after a change: stars and lake lights dip toward
+  // what is behind them, a shooting star now and then, rain or snow falls past. The room goes on top, so all of it
+  // shows only through the clear glass.
+  const O = ART.skies[sky];
+  if (skyFade < 1 && skyPrev) g.drawImage(ART.skies[skyPrev].img, ART.at[0], ART.at[1]);
+  g.globalAlpha = skyFade; g.drawImage(O.img, ART.at[0], ART.at[1]); g.globalAlpha = 1;
+  const fl = ST.storm ? flashAt(time - strikeT) : 0;
+  if (ST.rain || ST.storm) {
+    if (ST.rain && !ART.skies.rain) rectA(ART.at[0], ART.at[1], O.img.width, O.img.height, '#1c2232', 0.55);
+    // lightning: the lit frame of the storm fades in and out with the flash; a bolt shows for the bright moments
+    if (fl > 0.01) {
+      const F = ART.skies['storm-flash'];
+      if (F) { g.globalAlpha = fl; g.drawImage(F.img, ART.at[0], ART.at[1]); }
+      else rectA(ART.at[0], ART.at[1], O.img.width, O.img.height, '#c8d4ff', 0.5 * fl);
+      g.globalAlpha = 1;
+      const ts = time - strikeT;
+      if (bolt && (ts < 0.12 || (!CALM && ts > 0.22 && ts < 0.3))) for (const [x, y, core] of bolt) px(x, y, core ? '#f6f2ff' : '#a8b8ff', core ? 1 : 0.45);
+    }
+    for (const r of ripples) {
+      const w = r.a < 0.15 ? 0 : r.a < 0.35 ? 1 : 2;
+      for (let k = -w; k <= w; k++) px(r.x + k, r.y, '#aab8d8', 0.5 - r.a * 0.6);
+    }
+    for (const d of rainDrops) for (let k = 0; k < 3; k++) px(d.x - k * 0.22, d.y - k, '#aebfdc', 0.32 - k * 0.09);
+    for (const d of glassDrops) { px(d.x, d.y, '#dfe8f6', 0.6); px(d.x, d.y + 1, '#0b0f20', 0.35); if (d.v) px(d.x, d.y - 1, '#c8d4ea', 0.25); }
+  } else {
+    for (const t of O.twinkles) {
+      const v = Math.sin(time * t.f * (t.lake ? 2.2 : 1) + t.p), a = t.lake ? clamp(-v, 0, 1) * 0.8 : (0.5 - 0.5 * v) * 0.7;
+      if (a > 0.02) px(t.x, t.y, t.bg, a);
+    }
+    if (shoot) for (let k = 0; k < 6; k++) px(shoot.x + k * 2, shoot.y - k * 0.7, '#fff6e0', (1 - k / 6) * (1 - shoot.a / 0.55));
+    for (const f of flakes) { if (f.near) rectA(Math.round(f.x), Math.round(f.y), 2, 2, '#f4f7ff', 0.85); else px(f.x, f.y, '#e8eeff', 0.7); }
+    const leafA = sky === 'autumn' ? skyFade : skyPrev === 'autumn' ? 1 - skyFade : 0;
+    if (leafA > 0) for (const l of leaves) { const flat = Math.sin(time * l.spin + l.p) > 0; rectA(Math.round(l.x), Math.round(l.y), flat ? 2 : 1, flat ? 1 : 2, l.c, 0.9 * leafA); }
+    // fog: two banks of the same strip at two speeds, so the mist drifts and thins and thickens
+    if (ST.fog && fogCv) {
+      const w = O.img.width, h = O.img.height;
+      for (const [speed, a, o] of [[2.2, 0.45, 0], [4, 0.3, 97]]) {
+        g.globalAlpha = a;
+        g.drawImage(fogCv, Math.floor(time * speed + o) % (2 * w), 0, w, h, ART.at[0], ART.at[1], w, h);
+      }
+      g.globalAlpha = 1;
+    }
   }
-  if (shoot) for (let k = 0; k < 6; k++) px(shoot.x + k * 2, shoot.y - k * 0.7, '#fff6e0', (1 - k / 6) * (1 - shoot.a / 0.55));
-  g.globalAlpha = 1;
-  for (const c of OUT.clouds) g.drawImage(c.cv, Math.round(c.x), c.y);
-  g.drawImage(landBuf.cv, 0, 0);
-  // lake
-  for (const gl of OUT.glints) { const v = Math.sin(time * gl.s + gl.p); if (v > 0.45) rectA(gl.x, gl.y, gl.len, 1, OUT.glintCol, (v - 0.45) * 1.4); }
-  for (const r of ripples) {
-    const w = r.a < 0.15 ? 0 : r.a < 0.35 ? 1 : 2;
-    rectA(Math.round(r.x - w), r.y, w * 2 + 1, 1, '#aab8d8', 0.5 - r.a * 0.6);
-  }
-  for (const f of OUT.flies) {
-    const b = Math.max(0, Math.sin(time * f.f + f.p)); if (b < 0.05) continue;
-    rectA(Math.round(f.x) - 1, Math.round(f.y) - 1, 3, 3, '#d8f27a', b * b * 0.18);
-    px(f.x, f.y, '#efffa0', b);
-  }
-  for (const d of rainDrops) for (let k = 0; k < 3; k++) px(d.x - k * 0.22, d.y - k, '#aebfdc', 0.32 - k * 0.09);
-  for (const d of glassDrops) { px(d.x, d.y, '#dfe8f6', 0.6); px(d.x, d.y + 1, '#0b0f20', 0.35); if (d.v) px(d.x, d.y - 1, '#c8d4ea', 0.25); }
   g.globalAlpha = 1;
   if (roomFade < 1) { g.drawImage(roomPrev, 0, 0); g.globalAlpha = roomFade; }
   g.drawImage(roomCv, 0, 0); g.globalAlpha = 1;
   // the lamp swells a little with each kick and chord
   if (ST.lamp && BEAT.glow * ST.beat > 0.01) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.45 * BEAT.glow * ST.beat; g.drawImage(glowCv, 0, 0); g.globalCompositeOperation = 'source-over'; }
-
-  // fairy lights: slow shimmer, a pulse that runs along the string on each chord, a sparkle on some hats
-  for (const b of bulbs) {
-    const v = 0.55 + 0.45 * Math.sin(time * 0.9 + b.p);
-    let w = 0; for (const q of waves) w = Math.max(w, Math.exp(-(((b.x - 64 - q.a * 200) / 15) ** 2)));
-    w *= ST.beat;
-    rectA(b.x - 1, b.y - 1, 3, 3, b.c, 0.16 * v + 0.3 * w);
-    px(b.x, b.y, b.c, Math.min(1, 0.55 + 0.45 * v + w));
-    if (b.s > 0) { px(b.x, b.y, '#fff6e0', b.s); rectA(b.x - 1, b.y, 3, 1, '#fff6e0', 0.4 * b.s); rectA(b.x, b.y - 1, 1, 3, '#fff6e0', 0.4 * b.s); }
-  }
+  // a flash spills cool light from the window into the room; the cats come after, so they stay against the light
+  if (fl > 0.01 && flashCv) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.55 * fl; g.drawImage(flashCv, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; }
   // dust motes in lamp light
   if (ST.lamp) for (const m of motes) px(m.x, m.y, '#ffe0a8', 0.25 + 0.25 * Math.sin(time * 1.3 + m.p));
-  // candle flame, a little taller and brighter just after it is lit
+  // candle flame: the tip leans and stretches, a little taller and brighter just after it is lit
   if (ST.candle) { const fl = Math.sin(time * 13) + Math.sin(time * 7.3 + 1), jx = fl > 1.2 ? 1 : fl < -1.2 ? -1 : 0;
-    rectA(211, 111, 7, 8, '#ffb84a', 0.08 + 0.03 * Math.sin(time * 9) + 0.2 * flare);
-    px(214, 118, '#f6a83a'); px(214, 117, '#fff1b0'); px(214, 116, '#ffe08a'); px(214 + jx, 115, '#f6a83a', 0.9);
-    if (fl > 0 || flare > 0) px(214 + jx, 114, '#f6a83a', 0.5 + 0.5 * flare);
-    if (flare > 0.4) px(214, 113, '#f6a83a', flare); }
+    rectA(337, 73, 11, 12, '#ffb84a', 0.06 + 0.03 * Math.sin(time * 9) + 0.2 * flare);
+    if (jx) { px(342, 76, '#8a4a52', 0.7); px(342 + jx, 76, '#f6a83a', 0.9); }
+    if (fl > 0 || flare > 0) px(342 + jx, 75, '#f6a83a', 0.5 + 0.5 * flare);
+    if (flare > 0.4) px(342, 74, '#f6a83a', flare); }
   // mug steam, and smoke from a candle that was just blown out (same particles, their own colour)
   for (const s of steam) px(s.x + Math.sin(s.a * 2.2 + s.p) * 1.4, s.y, s.c || '#e8d8c8', (s.c ? 0.6 : 0.32) * Math.sin(Math.PI * s.a / 3.4));
-  // boombox: speaker caps push out on the kick, reels, spectrum
-  if (BEAT.kick > 0.45) for (const cx of [252, 286]) { ellA(cx, 124, 2.4, 2.4, '#2e2e39', 1); ellA(cx, 124, 1.4, 1.4, '#3c3c4a', 1); }
-  for (const [cx, cy] of [[266, 119], [272, 119]]) {
-    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; px(cx + Math.round(Math.cos(a) * 2.6), cy + Math.round(Math.sin(a) * 2.6), '#4c505c'); }
-    for (let k = 0; k < 3; k++) { const a = reelA + k * Math.PI * 2 / 3; px(cx + Math.round(Math.cos(a) * 1.6), cy + Math.round(Math.sin(a) * 1.6), '#c8c0b0'); }
-    px(cx, cy, '#e8e0d0');
+  g.globalAlpha = 1;
+  // while the room fades after a lamp switch, the reels and cats fade over from the old light to the new one
+  const light = lightNow(), lights = roomFade < 1 && lightWas !== light ? [[lightWas, 1], [light, roomFade]] : [[light, 1]];
+  // tape deck: reels, and the meters while music plays
+  if (reelFrames.length) { const k = ((Math.round(reelA / (2 * Math.PI) * REEL_N) % REEL_N) + REEL_N) % REEL_N;
+    for (const [L, a] of lights) { const f = reelsIn(L); g.globalAlpha = a; REELS.forEach(([cx, cy], r) => g.drawImage(f[r][k], cx - REEL_R, cy - REEL_R)); }
+    g.globalAlpha = 1; }
+  if (playing) for (let r = 0; r < 2; r++) {
+    const n = Math.round((BEAT.spec[r * 3] + BEAT.spec[r * 3 + 1] + BEAT.spec[r * 3 + 2]) / 3 * 6);
+    for (let i = 0; i < 6; i++) px(LEDS.x + 2 * i, LEDS.rows[r], i < n ? LEDS.on[i] : LEDS.off[i]);
   }
-  rectA(266, 122, 7, 1, '#3a2a20', 1);
-  { const cols = ['#5fbf6a', '#cfd05a', '#f05a40'];
-    for (let i = 0; i < 6; i++) { const n = Math.round(BEAT.spec[i] * 3); for (let r = 0; r < 3; r++) px(263 + i * 2, 132 - r, r < n ? cols[r] : '#1c2420', 1); } }
-
-  // cats
+  // cats: bodies take the in-breath frame at the top of a breath; the Devon's tail sways from the sill
   const D = cats.devon, S = cats.sph;
-  ellA(D.cx, D.by - 0.5, 11, 1.4, '#0a0610', 0.45);
-  ellA(S.cx + 2, S.by - 1, 15, 1.6, '#0a0610', 0.45);
-  chain(D.cx + 7, D.by - 3, 0.3, 0.085, 16, 1.4, i => 0.05 * Math.sin(swayPh - i * 0.3) * (i / 8), 2, '#cfc6cc', '#120c18');
-  g.globalAlpha = 1;
-  g.drawImage(CAT.devonBody[D.br > 0.5 ? 1 : 0], D.cx - 14, D.by - 23);
-  g.drawImage(CAT.sphBody[S.br > 0.5 ? 1 : 0], S.cx - 18, S.by - 31);
-  chain(S.cx + 12, S.by - 6, 0.9, 0, 14, 1.5, i => i < 5 ? 0.45 : (i > 10 ? 0.4 * Math.sin(time * 9) * S.twitch : 0) + (i > 8 ? 0.22 * Math.sin(Math.PI * S.tap) : 0), 1, '#736166', '#120c18');
+  if (SPR['devon-body']) for (const [L, a] of lights) {
+    g.globalAlpha = a;
+    for (const [c, cat] of [[D, 'devon'], [S, 'sph']]) { const n = cat + '-body' + (c.br > 0.5 ? '-in' : ''); g.drawImage(lit(n, L), SPR[n].x, SPR[n].y); }
+    drawTail(swayPh, L);
+  }
   g.globalAlpha = 1;
 
-  // present
+  // present; on a narrow screen the wall runs on above the picture and the desk below it, fading into the dark
   sc.fillStyle = '#0d0912'; sc.fillRect(0, 0, screen.width, screen.height);
   sc.imageSmoothingEnabled = false;
-  if (view.ext) {
-    const e = view.ext, yTop = Math.round(view.oy), yBot = Math.round(view.oy + H * view.s);
-    sc.drawImage(e.top, 0, 0, W, e.T, view.ox, 0, W * view.s, yTop);
-    sc.drawImage(e.bot, 0, 0, W, e.B, view.ox, yBot, W * view.s, Math.round(e.B * view.s));
-    sc.drawImage(low, 0, 0, W, H, view.ox, yTop, W * view.s, yBot - yTop);
-  } else sc.drawImage(low, 0, 0, W, H, view.ox, view.oy, W * view.s, H * view.s);
-  // heads are drawn at screen resolution so a nod or a breath can move them by part of a pixel
+  const yTop = Math.round(view.oy), yBot = Math.round(view.oy + H * view.s);
+  if (yTop > 0) {
+    sc.drawImage(low, 0, 0, W, 1, view.ox, 0, W * view.s, yTop);
+    sc.drawImage(low, 0, H - 1, W, 1, view.ox, yBot, W * view.s, screen.height - yBot);
+    for (const [y0, y1] of [[yTop, 0], [yBot, screen.height]]) {
+      const gr = sc.createLinearGradient(0, y0, 0, y1);
+      gr.addColorStop(0, 'rgba(13,9,18,0)'); gr.addColorStop(1, 'rgba(13,9,18,0.9)');
+      sc.fillStyle = gr; sc.fillRect(0, Math.min(y0, y1), screen.width, Math.abs(y1 - y0));
+    }
+  }
+  sc.drawImage(low, 0, 0, W, H, view.ox, yTop, W * view.s, yBot - yTop);
+  // heads are drawn at screen resolution so a nod or a breath can move them by part of a pixel. Eyes shut for a blink,
+  // a doze or a pet; the Sphynx's lids droop when it gets sleepy, and an ear flicks now and then on the backbeat.
+  if (!SPR['devon-head']) return;
   const head = (spr, x, y) => sc.drawImage(spr, Math.round(view.ox + x * view.s), Math.round(view.oy + y * view.s), Math.round(spr.width * view.s), Math.round(spr.height * view.s));
   const nodOff = D.nod > 0 ? 0.5 * Math.sin(Math.PI * (1 - D.nod)) : 0, dShut = D.mouth <= 0 && (D.blink > 0 || D.doze > 0);
-  head(dShut ? catHead('devon', 'closed', false, '', 0, 0) : catHead('devon', 'open', D.mouth > 0, '', D.lx, D.ly), D.cx - 14, D.by - 35 + nodOff - BREATH * D.br);
+  const dh = SPR['devon-head'], sh = SPR['sph-head'];
   const sEyes = S.mouth > 0 ? 'open' : S.blink > 0 || S.doze > 0 || (S.sleepy > 0 && S.sleepy < 1.2) ? 'closed' : S.sleepy > 0 ? 'half' : 'open';
-  head(catHead('sph', sEyes, S.mouth > 0, S.ear > 0 ? S.earSide : '', sEyes === 'closed' ? 0 : S.lx, sEyes === 'open' ? S.ly : 0), S.cx - 21, S.by - 50 + (S.tap > 0.5 ? 1 : 0) - BREATH * S.br);
+  for (const [L, a] of lights) {
+    sc.globalAlpha = a;
+    head(dShut ? catHead('devon', 'closed', false, '', 0, 0, L) : catHead('devon', 'open', D.mouth > 0, '', D.lx, D.ly, L), dh.x, dh.y + nodOff - BREATH * D.br);
+    head(catHead('sph', sEyes, S.mouth > 0, S.ear > 0 ? S.earSide : '', sEyes === 'open' ? S.lx : 0, sEyes === 'open' ? S.ly : 0, L), sh.x, sh.y + (S.tap > 0.5 ? 1 : 0) - BREATH * S.br);
+  }
+  sc.globalAlpha = 1;
 }
 
 let lastT = performance.now(), lastSkyCheck = 0;
 function frame(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
   update(dt); draw();
-  if (now - lastSkyCheck > 60000) { lastSkyCheck = now; if (ST.sky === 'auto' && skyT() !== OUT.t) buildOutside(); }
+  if (now - lastSkyCheck > 60000) { lastSkyCheck = now; setSky(viewFor()); }
   requestAnimationFrame(frame);
 }
 
 /* =====================================================================
    BOOT
    ===================================================================== */
-CAT.devonBody = [devonBody(false), devonBody(true)]; CAT.sphBody = [sphynxBody(false), sphynxBody(true)];
-roomCv = buildRoom(); glowCv = buildGlow();
-buildOutside(); spawnRain();
 resize(); syncUI(); poke();
-lastSkyCheck = performance.now();
-requestAnimationFrame(frame);
+fetch('scene.json', { cache: 'no-cache' }).then(r => r.json()).then(meta => loadArt(meta).then(() => meta)).then(meta => {
+  sky = ART.skies[viewFor()] ? viewFor() : Object.keys(ART.skies)[0];
+  readArt(); buildCats(meta); buildReels();
+  roomCv = buildRoom(); glowCv = buildGlow(); flashCv = buildFlashLight();
+  { const o = Object.values(ART.skies)[0].img; fogCv = buildFog(o.width, o.height); }
+  spawnRain(); spawnSnow();
+  lastT = performance.now();
+  requestAnimationFrame(frame);
+}).catch(e => console.error('scene failed to start (are scene.json, its skies, room.png and cats.png there?)', e));
 </script>
 </body>
 </html>
