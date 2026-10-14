@@ -370,8 +370,8 @@ const CAT_VOICES = {
   },
   sph: {
     pan: 0.1,
-    // the grey cat's synthesized meow is muted until a real recording replaces it; he keeps his mrr and purr
-    noMeow: true,
+    // the Sphynx mostly answers with a mrr: only this share of its meows comes out as a meow
+    meowChance: 0.3,
     meow: { dur: 0.62, f0: [[0, 330], [0.3, 410], [0.6, 390], [0.85, 460], [1, 500]], F1: [[0, 300], [0.12, 450], [0.35, 820], [0.6, 760], [0.85, 450], [1, 400]], F2: [[0, 1200], [0.12, 1750], [0.35, 1550], [0.65, 1350], [0.88, 950], [1, 880]], F3: [[0, 2900], [1, 2900]], amp: [[0, 0], [0.1, 0.5], [0.3, 0.95], [0.6, 1], [0.85, 0.7], [1, 0]], noise: 0.13, mouth: true, soft: true, gain: 0.42 },
     mrr: { dur: 0.38, f0: [[0, 250], [0.6, 262], [1, 340]], F1: [[0, 300], [1, 400]], F2: [[0, 1000], [1, 1150]], F3: [[0, 2700], [1, 2700]], amp: [[0, 0], [0.1, 1.1], [0.8, 1.1], [1, 0]], noise: 0.05, trill: 26 }
   }
@@ -457,7 +457,7 @@ function catSay(id, kind) {
   const c = cats[id];
   if (c.doze > 0 || c.purrSleepy) { c.doze = 0; c.purrSleepy = false; purrHalt(id); }
   const V = CAT_VOICES[id];
-  if (kind === 'meow' && V.noMeow) kind = 'mrr';
+  if (kind === 'meow' && V.meowChance != null && Math.random() >= V.meowChance) kind = 'mrr';
   const v = V[kind], d = catVoice(AC.currentTime + 0.06, v, V.pan);
   if (v.mouth) cats[id].mouth = d + 0.05;
 }
