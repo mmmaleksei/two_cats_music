@@ -40,28 +40,29 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=tabpanel]:fo
   max-height:calc(100vh - var(--hud-top) - var(--hud-bottom));
   max-height:calc(100dvh - var(--hud-top) - var(--hud-bottom));
   display:flex;flex-direction:column;gap:8px;transition:opacity .8s}
-#player,#panel,#volume-panel,#track-panel{background:var(--panel);border:2px solid var(--panel-edge);box-shadow:5px 5px 0 var(--shadow)}
+#player,#panel,#track-panel{background:var(--panel);border:2px solid var(--panel-edge);box-shadow:5px 5px 0 var(--shadow)}
 #panel,#track-panel{--dim:#c2ad94;background:rgba(17,12,24,.96)}
-#player{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr) repeat(3,44px);align-items:center;gap:4px;padding:8px;flex-shrink:0}
+#player{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr) repeat(2,44px);align-items:center;gap:4px;padding:8px;flex-shrink:0}
 #pet-hint{position:absolute;left:0;bottom:calc(100% + 10px);width:max-content;max-width:100%;margin:0;
   padding:5px 8px;font-size:17px;line-height:1.1;color:var(--ink);background:var(--panel);
   border:1px solid var(--panel-edge);box-shadow:3px 3px 0 var(--shadow);pointer-events:none;transition:opacity .5s}
 #pet-hint.dismissed{opacity:0}
-#hud:is(.settings-open,.volume-open,.track-open) #pet-hint{display:none}
+#hud:is(.settings-open,.track-open) #pet-hint{display:none}
 body.idle #hud{opacity:0}
 body.idle #hud:focus-within{opacity:1}
 body.idle{cursor:none}
 .np{min-width:0;min-height:44px;padding:0 4px;text-align:left;touch-action:manipulation}
 .np > span{display:block}
 .np .track-line{display:flex;align-items:center;gap:4px}
-.track-chevron{width:8px;height:8px;flex-shrink:0;color:var(--dim);shape-rendering:crispEdges}
+.track-chevron{width:12px;height:12px;flex-shrink:0;color:var(--dim);shape-rendering:crispEdges}
 #track-toggle:hover #title,#track-toggle[aria-expanded="true"] #title{color:var(--accent)}
 #track-toggle[aria-expanded="true"] .track-chevron{transform:rotate(180deg);color:var(--accent)}
 #title{font-size:23px;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #meta{font-size:15px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
 .ic{flex:0 0 var(--control-size);width:var(--control-size);height:var(--control-size);
   display:grid;place-items:center;border:2px solid transparent;touch-action:manipulation}
-.ic svg{width:18px;height:18px;shape-rendering:crispEdges}
+/* A shared 12-pixel grid keeps every control crisp at its 2x display size. */
+.ic svg{width:24px;height:24px;shape-rendering:crispEdges}
 .ic:hover{color:var(--accent)}
 .ic[aria-expanded="true"]{color:var(--accent);border-color:var(--panel-edge);background:rgba(243,226,196,.05)}
 #play{background:var(--accent);color:var(--accent-ink)}
@@ -81,12 +82,14 @@ input[type=range]:hover::-webkit-slider-thumb{background:var(--accent)}
 #panel-body{overflow-y:auto;overscroll-behavior:contain;min-height:0;padding:8px 4px 4px;
   scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
 [role=tabpanel]{display:grid;gap:8px}
+#settings-sound{row-gap:4px}
 .f{display:grid;grid-template-columns:72px minmax(0,1fr) 28px;align-items:center;gap:8px;min-height:44px}
 label,.setting-label{color:var(--dim)}
 .val{text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
 .pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-.dial label{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dial-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .setting-label{display:block;margin-bottom:6px;font-size:17px}
+#settings-sound .setting-label{margin-bottom:2px}
 .seg{display:flex;gap:4px}
 .seg button,.text-button{min-height:44px;padding:6px 10px;border:2px solid var(--panel-edge);font-size:17px;touch-action:manipulation}
 #layers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
@@ -100,8 +103,7 @@ label,.setting-label{color:var(--dim)}
 .room-pair label{display:block;font-size:17px;margin-bottom:4px}
 select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border:2px solid var(--panel-edge);border-radius:0;min-width:0;width:100%;min-height:44px;padding:4px 8px;cursor:pointer}
 .text-button{display:flex;align-items:center;justify-content:center;gap:8px;width:100%}
-.text-button svg{width:18px;height:18px;shape-rendering:crispEdges}
-#volume-panel{flex-shrink:0;padding:8px 12px;font-size:19px}
+.text-button svg{width:24px;height:24px;flex-shrink:0;shape-rendering:crispEdges}
 #track-panel{display:flex;flex-direction:column;min-height:0;padding:6px;font-size:19px}
 #track-panel h2{font-size:19px;font-weight:normal;color:var(--dim);margin:0 4px}
 #track-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:12px 6px 6px;scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
@@ -122,6 +124,15 @@ select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border
 @media (max-width:480px){
   #hud{width:calc(100vw - var(--hud-left) - var(--hud-right))}
 }
+@media (min-width:900px) and (hover:hover) and (pointer:fine){
+  #hud{width:520px}
+  #settings-sound{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px}
+  #settings-sound > .pair,#settings-sound > :last-child{grid-column:1 / -1}
+  #settings-sound .dial{display:grid;grid-template-columns:72px minmax(0,1fr) 28px;align-items:center;gap:8px;min-height:44px}
+  #settings-sound .dial-head{display:contents}
+  #settings-sound .dial input{grid-column:2;grid-row:1}
+  #settings-sound .dial .val{grid-column:3;grid-row:1}
+}
 @media (prefers-reduced-motion:reduce){
   #pet-hint{transition:none}
 }
@@ -140,15 +151,16 @@ select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border
         <button id="tab-help" role="tab" aria-selected="false" aria-controls="settings-help" tabindex="-1" data-tab="help">help</button>
       </div>
       <button id="panel-close" class="ic" aria-label="Close settings" title="Close settings (Esc)">
-        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3 2L8 7L13 2L14 3L9 8L14 13L13 14L8 9L3 14L2 13L7 8L2 3Z"/></svg>
+        <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" focusable="false"><path d="M2 2h2v1H2zM8 2h2v1H8zM3 3h2v1H3zM7 3h2v1H7zM4 4h4v1H4zM5 5h2v2H5zM4 7h4v1H4zM3 8h2v1H3zM7 8h2v1H7zM2 9h2v1H2zM8 9h2v1H8z"/></svg>
       </button>
     </div>
     <div id="panel-body">
       <div id="settings-sound" role="tabpanel" aria-labelledby="tab-sound">
+        <div class="f"><label for="vol">volume</label><input id="vol" type="range" min="0" max="1" step="0.01"><span class="val" id="volv"></span></div>
         <div class="f"><label for="bpm">tempo</label><input id="bpm" type="range" min="62" max="92" step="1" title="Base tempo"><span class="val" id="bpmv"></span></div>
         <div class="pair">
-          <div class="dial"><label for="vinyl">vinyl <span class="val" id="vinylv" aria-hidden="true"></span></label><input id="vinyl" type="range" min="0" max="1" step="0.01"></div>
-          <div class="dial"><label for="purr">purring <span class="val" id="purrv" aria-hidden="true"></span></label><input id="purr" type="range" min="0" max="1" step="0.01"></div>
+          <div class="dial"><div class="dial-head"><label for="vinyl">vinyl</label><span class="val" id="vinylv" aria-hidden="true"></span></div><input id="vinyl" type="range" min="0" max="1" step="0.01"></div>
+          <div class="dial"><div class="dial-head"><label for="purr">purring</label><span class="val" id="purrv" aria-hidden="true"></span></div><input id="purr" type="range" min="0" max="1" step="0.01"></div>
         </div>
         <div><span class="setting-label" id="layers-label">mix</span><div class="mix"><div class="seg" id="layers" role="group" aria-label="Instruments">
           <button data-v="keys">keys</button><button data-v="bass">bass</button><button data-v="drums">drums</button><button data-v="melody">melody</button>
@@ -172,7 +184,7 @@ select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border
         <p class="help-copy">Tap a cat to say hi. Hold to pet.<br>The lamp, candle, mug, window and tape deck respond to a tap, too.</p>
         <p class="help-copy">Auto sky follows local time. Auto season turns to autumn from September to November.</p>
         <button id="fs" class="text-button" title="Fullscreen (F)" aria-label="Fullscreen">
-          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h4v2H4v2H2zM10 2h4v4h-2V4h-2zM2 10h2v2h2v2H2zM12 10h2v4h-4v-2h2z"/></svg>fullscreen
+          <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" focusable="false"><path d="M1 1h4v1H2v3H1zM7 1h4v4h-1V2H7zM1 7h1v3h3v1H1zM10 7h1v4H7v-1h3z"/></svg>fullscreen
         </button>
         <dl class="shortcuts" aria-label="Keyboard shortcuts">
           <div><dt>space</dt><dd>play / pause</dd></div><div><dt>n</dt><dd>next track</dd></div>
@@ -183,14 +195,11 @@ select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border
       </div>
     </div>
   </section>
-  <div id="volume-panel" role="region" aria-label="Volume" hidden>
-    <div class="f"><label for="vol">volume</label><input id="vol" type="range" min="0" max="1" step="0.01"><span class="val" id="volv"></span></div>
-  </div>
   <section id="track-panel" aria-labelledby="track-heading" hidden>
     <div class="panel-head">
       <h2 id="track-heading">track details</h2>
       <button id="track-close" class="ic" aria-label="Close track details" title="Close track details (Esc)">
-        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3 2L8 7L13 2L14 3L9 8L14 13L13 14L8 9L3 14L2 13L7 8L2 3Z"/></svg>
+        <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" focusable="false"><path d="M2 2h2v1H2zM8 2h2v1H8zM3 3h2v1H3zM7 3h2v1H7zM4 4h4v1H4zM5 5h2v2H5zM4 7h4v1H4zM3 8h2v1H3zM7 8h2v1H7zM2 9h2v1H2zM8 9h2v1H8z"/></svg>
       </button>
     </div>
     <div id="track-body" tabindex="0">
@@ -209,17 +218,14 @@ select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border
     <p id="pet-hint">tap a cat · hold to pet</p>
     <button id="play" class="ic" title="Play / pause (Space)" aria-label="Play"></button>
     <button id="track-toggle" class="np" aria-label="Track details: lamplight room" aria-expanded="false" aria-controls="track-panel" title="Track details">
-      <span class="track-line"><span id="title">lamplight room</span><svg class="track-chevron" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true"><path d="M3 2h2v1h1v1h1v2H5V5H3v1H1V4h1V3h1z"/></svg></span>
+      <span class="track-line"><span id="title">lamplight room</span><svg class="track-chevron" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" focusable="false"><path d="M5 4h2v1h1v1h1v1h1v1H8V7H7V6H5v1H4v1H2V7h1V6h1V5h1z"/></svg></span>
       <span id="meta">live lofi radio</span>
     </button>
     <button id="next" class="ic" title="Next track (N)" aria-label="Next track">
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h2v1h1v1h1v1h1v1h1v2H7v1H6v1H5v1H4v1H2zM9 3h2v1h1v1h1v1h1v1h0v2h-1v1h-1v1h-1v1h-1v1H9z"/></svg>
-    </button>
-    <button id="volume-toggle" class="ic" title="Volume" aria-label="Volume" aria-expanded="false" aria-controls="volume-panel">
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 6h3V5h1V4h1V3h2v10H7v-1H6v-1H5v-1H2zM11 5h1v1h1v4h-1v1h-1V9h1V7h-1zM13 2h1v1h1v2h1v6h-1v2h-1v1h-1v-2h1v-2h1V6h-1V4h-1z"/></svg>
+      <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" focusable="false"><path d="M2 2h1v1h1v1h1v1h2v2H5v1H4v1H3v1H2zM9 2h2v8H9z"/></svg>
     </button>
     <button id="gear" class="ic" title="Settings" aria-label="Settings" aria-expanded="false" aria-controls="panel">
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h12v1H2zM4 2h2v3H4zM2 8h12v1H2zM10 7h2v3h-2zM2 12h12v1H2zM6 11h2v3H6z"/></svg>
+      <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M5 1h2v2h1V2h2v2H9v1h2v2H9v1h1v2H8V9H7v2H5V9H4v1H2V8h1V7H1V5h2V4H2V2h2v1h1zM5 5v2h2V5z"/></svg>
     </button>
   </div>
 </div>
@@ -1501,8 +1507,8 @@ function startTicker() {
    UI
    ===================================================================== */
 const $ = id => document.getElementById(id);
-const ICON_PLAY = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2h2v1h1v1h1v1h1v1h1v1h1v2h-1v1h-1v1H9v1H8v1H7v1H6v1H4z"/></svg>';
-const ICON_PAUSE = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2h3v12H3zM10 2h3v12h-3z"/></svg>';
+const ICON_PLAY = '<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" focusable="false"><path d="M3 2h2v1h1v1h1v1h2v2H7v1H6v1H5v1H3z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" focusable="false"><path d="M3 2h2v8H3zM7 2h2v8H7z"/></svg>';
 let shownTrack = null;
 function announce(s) {
   shownTrack = s;
@@ -1601,7 +1607,7 @@ function setSettingsTab(name, focus = false) {
 }
 function setSettings(open, restoreFocus = true) {
   const wasOpen = !$('panel').hidden;
-  if (open) { setVolumePanel(false, false); setTrackPanel(false, false); }
+  if (open) setTrackPanel(false, false);
   $('panel').hidden = !open;
   $('hud').classList.toggle('settings-open', open);
   $('gear').setAttribute('aria-expanded', open);
@@ -1609,19 +1615,9 @@ function setSettings(open, restoreFocus = true) {
   else if (wasOpen && restoreFocus) $('gear').focus({ preventScroll: true });
   poke();
 }
-function setVolumePanel(open, restoreFocus = true) {
-  const wasOpen = !$('volume-panel').hidden;
-  if (open) { setSettings(false, false); setTrackPanel(false, false); }
-  $('volume-panel').hidden = !open;
-  $('hud').classList.toggle('volume-open', open);
-  $('volume-toggle').setAttribute('aria-expanded', open);
-  if (open) $('vol').focus({ preventScroll: true });
-  else if (wasOpen && restoreFocus) $('volume-toggle').focus({ preventScroll: true });
-  poke();
-}
 function setTrackPanel(open, restoreFocus = true) {
   const wasOpen = !$('track-panel').hidden;
-  if (open) { setSettings(false, false); setVolumePanel(false, false); }
+  if (open) setSettings(false, false);
   $('track-panel').hidden = !open;
   $('hud').classList.toggle('track-open', open);
   $('track-toggle').setAttribute('aria-expanded', open);
@@ -1643,11 +1639,10 @@ $('settings-tabs').onkeydown = e => {
 };
 $('gear').onclick = () => setSettings($('panel').hidden);
 $('panel-close').onclick = () => setSettings(false);
-$('volume-toggle').onclick = () => setVolumePanel($('volume-panel').hidden);
 $('track-toggle').onclick = () => setTrackPanel($('track-panel').hidden);
 $('track-close').onclick = () => setTrackPanel(false);
 addEventListener('pointerdown', e => {
-  if (!$('hud').contains(e.target)) { setSettings(false, false); setVolumePanel(false, false); setTrackPanel(false, false); }
+  if (!$('hud').contains(e.target)) { setSettings(false, false); setTrackPanel(false, false); }
   if (e.target === $('screen') && ['devon', 'sph'].includes(hitAt(e.clientX, e.clientY))) dismissPetHint();
 });
 $('vol').oninput = e => setVol(+e.target.value);
@@ -1673,7 +1668,6 @@ addEventListener('keydown', e => {
   // Keep shortcuts out of native form controls; Escape always closes the open panel.
   if (e.code === 'Escape') {
     if (!$('track-panel').hidden) setTrackPanel(false);
-    else if (!$('volume-panel').hidden) setVolumePanel(false);
     else setSettings(false);
     return;
   }
@@ -1690,7 +1684,7 @@ addEventListener('keydown', e => {
   poke();
 });
 let idleT = 0;
-function poke() { document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => { if (playing && $('panel').hidden && $('volume-panel').hidden && $('track-panel').hidden && !$('hud').matches(':hover, :focus-within')) document.body.classList.add('idle'); }, 3500); }
+function poke() { document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => { if (playing && $('panel').hidden && $('track-panel').hidden && !$('hud').matches(':hover, :focus-within')) document.body.classList.add('idle'); }, 3500); }
 addEventListener('pointermove', poke); addEventListener('pointerdown', poke);
 
 /* =====================================================================
