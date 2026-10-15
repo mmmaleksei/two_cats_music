@@ -236,7 +236,7 @@ select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border
    Settings
    ===================================================================== */
 const ST = Object.assign({
-  vol: 0.75, bpm: 74, vinyl: 0.5, purr: 0.6, rain: false, storm: false, snow: false, fog: false, sky: 'auto', season: 'auto',
+  vol: 0.75, bpm: 74, vinyl: 0.5, purr: 0.6, rain: false, storm: false, snow: false, fog: false, sky: 'day', season: 'autumn',
   // how much the room moves with the beat; starts at zero for people who ask for reduced motion
   beat: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 0.7,
   lamp: true, candle: true,
@@ -1696,7 +1696,7 @@ addEventListener('pointermove', poke); addEventListener('pointerdown', poke);
 // which must not twinkle, and whether its sky has stars. The room's `lights` are the same room redrawn in other light
 // with the lamp off: `unlit` by moonlight, `unlit-day` by daylight. Each keeps its pixels (d), what its light does
 // to a colour at each spot for the cats (ratio, at most `max`), and its own reel frames.
-const ART = { skies: {}, room: new Image(), sheet: new Image(), lights: {}, d: null, at: [0, 0] };
+const ART = { props: [], skies: {}, room: new Image(), sheet: new Image(), lights: {}, d: null, at: [0, 0] };
 // every file is asked for with scene.json's version, so a browser holding older copies fetches these ones
 function loadArt(meta) {
   const v = meta.version ? '?v=' + meta.version : '', R = meta.layers.find(l => l.name === 'room');
@@ -1707,7 +1707,11 @@ function loadArt(meta) {
     ART.lights[k] = { img, max: L.max || 1, d: null, ratio: null, reels: null };
     return loaded(img).catch(() => { delete ART.lights[k]; });
   });
-  return Promise.all([loadSkies(meta, v), loaded(ART.room), loaded(ART.sheet), ...lights]);
+  ART.props = (meta.props || []).map(p => {
+    const img = new Image(); img.src = p.file + v;
+    return { img, at: p.at, scale: p.scale || 1, lights: {} };
+  });
+  return Promise.all([loadSkies(meta, v), loaded(ART.room), loaded(ART.sheet), ...lights, ...ART.props.map(p => loaded(p.img))]);
 }
 // an image is ready once it has loaded (decode() can wait for the page to be drawn, which a hidden page never is)
 const loaded = img => img.complete && img.naturalWidth ? Promise.resolve() : new Promise((ok, no) => { img.addEventListener('load', ok); img.addEventListener('error', no); });
@@ -1827,6 +1831,22 @@ function readArt() {
   }
 }
 const artAt = (d, x, y) => { const i = (y * W + x) * 4; return [d[i], d[i + 1], d[i + 2]]; };
+// Foreground desk props keep the original room and its lighting measurements untouched.
+function buildProps() {
+  for (const p of ART.props) for (const k of [...Object.keys(ART.lights), 'guess']) {
+    const c = document.createElement('canvas'); c.width = p.img.naturalWidth; c.height = p.img.naturalHeight;
+    const cx = c.getContext('2d'); cx.drawImage(p.img, 0, 0);
+    const img = cx.getImageData(0, 0, c.width, c.height), d = img.data, ratio = ART.lights[k]?.ratio;
+    for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+      const i = (y * c.width + x) * 4, sx = Math.floor(x / p.scale) + p.at[0], sy = Math.floor(y / p.scale) + p.at[1];
+      if (!d[i + 3]) continue;
+      if (ratio && sx >= 0 && sx < W && sy >= 0 && sy < H) {
+        const j = (sy * W + sx) * 3; for (let ch = 0; ch < 3; ch++) d[i + ch] *= ratio[j + ch];
+      } else unlitGuess(d, i, sx, sy);
+    }
+    cx.putImageData(img, 0, 0); p.lights[k] = c;
+  }
+}
 // the room for the current light and candle: the lit room, the lamp-off room for the sky (or the lit one dimmed by
 // guess); with the candle out the flame and its glow give way to the wall beside them
 function buildRoom() {
@@ -2399,6 +2419,12 @@ function draw() {
   if (reelFrames.length) { const k = ((Math.round(reelA / (2 * Math.PI) * REEL_N) % REEL_N) + REEL_N) % REEL_N;
     for (const [L, a] of lights) { const f = reelsIn(L); g.globalAlpha = a; REEL_AT.forEach((ox, r) => g.drawImage(f[r][k], REEL_X + ox - REEL_B, REEL_Y - REEL_B)); }
     g.globalAlpha = 1; }
+  // Portrait frame sits in front of the reels and shares the room lighting transition.
+  for (const [L, a] of lights) {
+    g.globalAlpha = a;
+    for (const p of ART.props) if (p.scale === 1) g.drawImage(p.lights[L] || p.img, p.at[0], p.at[1]);
+  }
+  g.globalAlpha = 1;
   // the lamp swells a little with each kick and chord
   if (ST.lamp && BEAT.glow * ST.beat > 0.01) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.45 * BEAT.glow * ST.beat; g.drawImage(glowCv, 0, 0); g.globalCompositeOperation = 'source-over'; }
   // a flash spills cool light from the window into the room; the cats come after, so they stay against the light
@@ -2444,6 +2470,16 @@ function draw() {
     }
   }
   sc.drawImage(low, 0, 0, W, H, view.ox, yTop, W * view.s, yBot - yTop);
+  // Small portrait details use a finer grid, like the cat heads, without resampling the room.
+  for (const [L, a] of lights) {
+    sc.globalAlpha = a;
+    for (const p of ART.props) if (p.scale > 1) {
+      const img = p.lights[L] || p.img;
+      sc.drawImage(img, Math.round(view.ox + p.at[0] * view.s), Math.round(view.oy + p.at[1] * view.s),
+        Math.round(img.width / p.scale * view.s), Math.round(img.height / p.scale * view.s));
+    }
+  }
+  sc.globalAlpha = 1;
   // heads are drawn at screen resolution so a nod or a breath can move them by part of a pixel. Eyes shut for a blink,
   // a doze or a pet; the Sphynx's lids droop when it gets sleepy, and an ear flicks now and then on the backbeat.
   if (!SPR['devon-head']) return;
@@ -2474,7 +2510,7 @@ function frame(now) {
 resize(); syncUI(); poke();
 fetch('scene.json', { cache: 'no-cache' }).then(r => r.json()).then(meta => loadArt(meta).then(() => meta)).then(meta => {
   sky = ART.skies[viewFor()] ? viewFor() : Object.keys(ART.skies)[0];
-  readArt(); buildCats(meta); buildReels();
+  readArt(); buildCats(meta); buildReels(); buildProps();
   roomCv = buildRoom(); glowCv = buildGlow(); flashCv = buildFlashLight();
   { const o = Object.values(ART.skies)[0].img; fogCv = buildFog(o.width, o.height); }
   spawnRain(); spawnSnow();
