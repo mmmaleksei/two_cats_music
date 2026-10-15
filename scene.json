@@ -219,5 +219,5 @@
  },
  "note": "Draw back to front: outside, room (transparent glass), cat bodies and the Devon's tail, heads. Positions are the rest pose in scene pixels (top-left). Draw room, bodies, tail, heads. Bodies hold 3 hidden neck rows under each head. '-in' bodies are the in-breath frame; flick heads drop one ear tip by 2 px.",
  "props": [{ "file": "desk-photo.png", "at": [324, 135] }, { "file": "desk-photo-face.png", "at": [341, 142], "scale": 2 }],
- "version": "64d5110f0d"
+ "version": "d149c4bdcb"
 }
