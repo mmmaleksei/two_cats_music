@@ -2047,6 +2047,64 @@ function catHead(cat, eyes, mouth, flick, lx, ly, light) {
     if (mouth) for (const [x, y, c] of F.mouth) { const t = ((y - oy) * w + x - ox) * 4, v = hex(c); d[t] = v[0]; d[t + 1] = v[1]; d[t + 2] = v[2]; }
   }));
 }
+// Keep Devon's neck attached to the head using the approved pixels. The chest moves continuously;
+// row 100 and everything below it (including the paws) retain their original scene-grid rendering.
+const DEVON_BODY_FIXED = 100, devonBodyLayers = {};
+function drawDevonChest(light, breath, nod, yTop, yBot) {
+  const body = SPR['devon-body'], head = SPR['devon-head'];
+  const key = [screen.width, screen.height, view.ox, view.s, yTop, yBot].join('|');
+  let layer = devonBodyLayers[light];
+  if (!layer || layer.key !== key) {
+    // Rasterize with precisely the same transform as the room, then move those screen pixels.
+    // This preserves the browser's nearest-neighbor sampling at fractional zoom levels too.
+    const sprite = lit('devon-body', light), pixels = sprite.getContext('2d').getImageData(0, 0, body.w, body.h).data;
+    const copy = src => {
+      const cv = document.createElement('canvas'); cv.width = src.width; cv.height = src.height;
+      cv.getContext('2d').drawImage(src, 0, 0); return cv;
+    };
+    const savedScene = copy(low), savedScreen = copy(screen);
+    g.save(); sc.save(); g.globalAlpha = sc.globalAlpha = 1;
+    g.drawImage(sprite, 0, 0, body.w, DEVON_BODY_FIXED - body.y, body.x, body.y, body.w, DEVON_BODY_FIXED - body.y);
+    sc.drawImage(low, 0, 0, W, H, view.ox, yTop, W * view.s, yBot - yTop);
+    const rgba = sc.getImageData(0, 0, screen.width, screen.height), mask = g.createImageData(W, H);
+    for (let p = 3; p < mask.data.length; p += 4) mask.data[p] = 255;
+    for (let y = 0; y < DEVON_BODY_FIXED - body.y; y++) for (let x = 0; x < body.w; x++) {
+      const p = ((y + body.y) * W + x + body.x) * 4, a = pixels[(y * body.w + x) * 4 + 3];
+      mask.data[p] = mask.data[p + 1] = mask.data[p + 2] = a;
+    }
+    g.putImageData(mask, 0, 0); sc.clearRect(0, 0, screen.width, screen.height); sc.drawImage(low, 0, 0, W, H, view.ox, yTop, W * view.s, yBot - yTop);
+    const alpha = sc.getImageData(0, 0, screen.width, screen.height).data;
+    g.globalCompositeOperation = sc.globalCompositeOperation = 'copy';
+    g.drawImage(savedScene, 0, 0); sc.drawImage(savedScreen, 0, 0); g.restore(); sc.restore();
+    for (let p = 0; p < rgba.data.length; p += 4) rgba.data[p + 3] = alpha[p];
+    const cv = document.createElement('canvas'); cv.width = screen.width; cv.height = screen.height;
+    cv.getContext('2d').putImageData(rgba, 0, 0);
+    layer = devonBodyLayers[light] = { key, cv };
+  }
+  const sy = (yBot - yTop) / H;
+  const neck = Math.round(view.oy + (head.y + nod - BREATH * breath) * view.s) - Math.round(view.oy + head.y * view.s);
+  const chest = -breath * view.s;
+  const ease = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+  const edge = y => {
+    const row = (y - yTop) / sy;
+    const shift = (neck + (chest - neck) * ease((row - 80) / 8)) * (1 - ease((row - 96) / 4));
+    return y + Math.round(shift);
+  };
+  const first = Math.max(0, Math.floor(yTop + body.y * sy) - 1);
+  const last = Math.min(screen.height, Math.ceil(yTop + DEVON_BODY_FIXED * sy) + 1);
+  for (let y = first; y < last;) {
+    const top = edge(y), height = edge(y + 1) - top;
+    if (height === 1) {
+      // Coalesce unscaled rows: ordinarily the whole chest needs only a handful of blits.
+      let end = y + 1;
+      while (end < last && edge(end + 1) === top + end + 1 - y) end++;
+      sc.drawImage(layer.cv, 0, y, screen.width, end - y, 0, top, screen.width, end - y); y = end;
+    } else {
+      if (height > 0) sc.drawImage(layer.cv, 0, y, screen.width, 1, 0, top, screen.width, height);
+      y++;
+    }
+  }
+}
 // the Devon's tail hangs from the sill and sways from its tip: the top rows stay put, each row below moves a little more
 const TAIL_FIXED = 4, TAIL_SWAY = 2.5;
 function drawTail(ph, light) {
@@ -2361,11 +2419,13 @@ function draw() {
     const n = Math.round((BEAT.spec[r * 3] + BEAT.spec[r * 3 + 1] + BEAT.spec[r * 3 + 2]) / 3 * 6);
     for (let i = 0; i < 6; i++) px(LEDS.x + 2 * i, LEDS.rows[r], i < n ? LEDS.on[i] : LEDS.off[i]);
   }
-  // cats: bodies take the in-breath frame at the top of a breath; the Devon's tail sways from the sill
+  // The Sphynx uses its in-breath frame; Devon's fixed lower body and tail stay on the scene grid.
   const D = cats.devon, S = cats.sph;
   if (SPR['devon-body']) for (const [L, a] of lights) {
     g.globalAlpha = a;
-    for (const [c, cat] of [[D, 'devon'], [S, 'sph']]) { const n = cat + '-body' + (c.br > 0.5 ? '-in' : ''); g.drawImage(lit(n, L), SPR[n].x, SPR[n].y); }
+    const db = SPR['devon-body'], fixed = DEVON_BODY_FIXED - db.y;
+    g.drawImage(lit('devon-body', L), 0, fixed, db.w, db.h - fixed, db.x, DEVON_BODY_FIXED, db.w, db.h - fixed);
+    const n = 'sph-body' + (S.br > 0.5 ? '-in' : ''); g.drawImage(lit(n, L), SPR[n].x, SPR[n].y);
     drawTail(swayPh, L);
   }
   g.globalAlpha = 1;
@@ -2393,6 +2453,7 @@ function draw() {
   const sEyes = S.mouth > 0 ? 'open' : S.blink > 0 || S.doze > 0 || (S.sleepy > 0 && S.sleepy < 1.2) ? 'closed' : S.sleepy > 0 ? 'half' : 'open';
   for (const [L, a] of lights) {
     sc.globalAlpha = a;
+    drawDevonChest(L, D.br, nodOff, yTop, yBot);
     head(dShut ? catHead('devon', 'closed', false, '', 0, 0, L) : catHead('devon', 'open', D.mouth > 0, '', D.lx, D.ly, L), dh.x, dh.y + nodOff - BREATH * D.br);
     head(catHead('sph', sEyes, S.mouth > 0, S.ear > 0 ? S.earSide : '', sEyes === 'open' ? S.lx : 0, sEyes === 'open' ? S.ly : 0, L), sh.x, sh.y + (S.tap > 0.5 ? 1 : 0) - BREATH * S.br);
   }

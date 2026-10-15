@@ -218,5 +218,5 @@
   "sph": 136
  },
  "note": "Draw back to front: outside, room (transparent glass), cat bodies and the Devon's tail, heads. Positions are the rest pose in scene pixels (top-left). Draw room, bodies, tail, heads. Bodies hold 3 hidden neck rows under each head. '-in' bodies are the in-breath frame; flick heads drop one ear tip by 2 px.",
- "version": "49733067dd"
+ "version": "ed011b9ac3"
 }
