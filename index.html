@@ -2440,9 +2440,9 @@ function draw() {
   // mug steam, and smoke from a candle that was just blown out (same particles, their own colour)
   for (const s of steam) px(s.x + Math.sin(s.a * 2.2 + s.p) * 1.4, s.y, s.c || '#e8d8c8', (s.c ? 0.6 : 0.32) * Math.sin(Math.PI * s.a / 3.4));
   g.globalAlpha = 1;
-  // the tape deck's meters while music plays
-  if (playing) for (let r = 0; r < 2; r++) {
-    const n = Math.round((BEAT.spec[r * 3] + BEAT.spec[r * 3 + 1] + BEAT.spec[r * 3 + 2]) / 3 * 6);
+  // Always cover the painted LEDs; paused meters show every LED in its off colour.
+  for (let r = 0; r < 2; r++) {
+    const n = playing ? Math.round((BEAT.spec[r * 3] + BEAT.spec[r * 3 + 1] + BEAT.spec[r * 3 + 2]) / 3 * 6) : 0;
     for (let i = 0; i < 6; i++) px(LEDS.x + 2 * i, LEDS.rows[r], i < n ? LEDS.on[i] : LEDS.off[i]);
   }
   // The Sphynx uses its in-breath frame; Devon's fixed lower body and tail stay on the scene grid.
