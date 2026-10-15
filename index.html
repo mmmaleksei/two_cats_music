@@ -1696,7 +1696,7 @@ addEventListener('pointermove', poke); addEventListener('pointerdown', poke);
 // which must not twinkle, and whether its sky has stars. The room's `lights` are the same room redrawn in other light
 // with the lamp off: `unlit` by moonlight, `unlit-day` by daylight. Each keeps its pixels (d), what its light does
 // to a colour at each spot for the cats (ratio, at most `max`), and its own reel frames.
-const ART = { props: [], skies: {}, room: new Image(), sheet: new Image(), lights: {}, d: null, at: [0, 0] };
+const ART = { props: [], skies: {}, room: new Image(), sheet: new Image(), lights: {}, d: null, at: [0, 0], tail: null };
 // every file is asked for with scene.json's version, so a browser holding older copies fetches these ones
 function loadArt(meta) {
   const v = meta.version ? '?v=' + meta.version : '', R = meta.layers.find(l => l.name === 'room');
@@ -1711,7 +1711,14 @@ function loadArt(meta) {
     const img = new Image(); img.src = p.file + v;
     return { img, at: p.at, scale: p.scale || 1, lights: {} };
   });
-  return Promise.all([loadSkies(meta, v), loaded(ART.room), loaded(ART.sheet), ...lights, ...ART.props.map(p => loaded(p.img))]);
+  // the Devon's tail drawn straight; without it the page straightens the curved one from the sheet (tailStrip)
+  let tailIn = null;
+  if (meta.tail) {
+    const img = new Image(); img.src = meta.tail.file + v;
+    ART.tail = { img, axis: meta.tail.axis };
+    tailIn = loaded(img).catch(() => { ART.tail = null; });
+  }
+  return Promise.all([loadSkies(meta, v), loaded(ART.room), loaded(ART.sheet), ...lights, ...ART.props.map(p => loaded(p.img)), tailIn]);
 }
 // an image is ready once it has loaded (decode() can wait for the page to be drawn, which a hidden page never is)
 const loaded = img => img.complete && img.naturalWidth ? Promise.resolve() : new Promise((ok, no) => { img.addEventListener('load', ok); img.addEventListener('error', no); });
@@ -1990,11 +1997,13 @@ function buildCats(meta) {
     SPR[name] = { cv, x: s.at[0], y: s.at[1], w, h, dark: {} };
   }
   for (const [name, id] of [['devon-body', 1], ['devon-tail', 1], ['devon-head', 1], ['sph-body', 2], ['sph-head', 2]]) {
-    const s = SPR[name]; let a;
+    // the tail swings, so its slack covers the swing, short of the props round it (the mug)
+    const s = SPR[name], sx = name === 'devon-tail' ? 6 : 1; let a;
     try { a = s.cv.getContext('2d').getImageData(0, 0, s.w, s.h).data; } catch (e) { return; }
     for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (a[(y * s.w + x) * 4 + 3])
-      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+      for (let j = -1; j <= 1; j++) for (let k = -sx; k <= sx; k++) {
         const X = s.x + x + k, Y = s.y + y + j;
+        if (Math.abs(k) > 1 && SPOTS.some(([, ...b]) => inBox(X, Y, b))) continue;
         if (X >= 0 && X < W && Y >= 0 && Y < H && !catAt[Y * W + X]) catAt[Y * W + X] = id;
       }
   }
@@ -2071,6 +2080,8 @@ function catHead(cat, eyes, mouth, flick, lx, ly, light) {
 // row 100 and everything below it (including the paws) retain their original scene-grid rendering.
 const DEVON_BODY_FIXED = 100, devonBodyLayers = {};
 function drawDevonChest(light, breath, nod, yTop, yBot) {
+  // a page loaded with no size yet (a hidden pane or frame) has nothing to draw into; copying a 0×0 canvas would throw
+  if (!screen.width || !screen.height) return;
   const body = SPR['devon-body'], head = SPR['devon-head'];
   const key = [screen.width, screen.height, view.ox, view.s, yTop, yBot].join('|');
   let layer = devonBodyLayers[light];
@@ -2125,14 +2136,125 @@ function drawDevonChest(light, breath, nod, yTop, yBot) {
     }
   }
 }
-// the Devon's tail hangs from the sill and sways from its tip: the top rows stay put, each row below moves a little more
-const TAIL_FIXED = 4, TAIL_SWAY = 2.5;
-function drawTail(ph, light) {
-  const s = SPR['devon-tail'], cv = lit('devon-tail', light);
-  for (let r = 0; r < s.h; r++) {
-    const u = Math.max(0, (r - TAIL_FIXED) / (s.h - 1 - TAIL_FIXED)), dx = Math.round(TAIL_SWAY * u ** 1.6 * Math.sin(ph - 1.2 * u));
-    g.drawImage(cv, 0, r, s.w, 1, s.x + dx, s.y + r, s.w, 1);
+// the Devon's tail hangs from the sill and bends along its length. Its pixels come from the tail drawn straight down
+// (tail.png, scene.json `tail`); its shape at rest is the approved curved tail (devon-tail in the sheet), whose middle,
+// row by row, is the rest spine. Rows 0..TAIL_FIXED-1 stay put under the body; below them each row turns by tail.th
+// (radians, from the root down) on top of its rest angle, and the rows are laid along that bent spine. Every output row
+// is one whole row of the strip (outline, fur, outline), widened as it tilts away from its rest angle, so the outline
+// never breaks; a tilted tail is shorter, so some rows drop out. With tail.th all zero every pixel of the strip lands
+// where the curved tail has it.
+const TAIL_FIXED = 4, TAIL_PAD = 8;
+// how the tail moves. Angles in radians, speeds in radians a second, times in seconds.
+// swing: sway without music; beatSwing: added at full motion while it plays; perBar: swings per bar;
+// idleSpeed / dozeSpeed / dozeSwing / dozeCurl: lazy sway, and while petted; lag: how far the tip trails the root;
+// flick: tip hook strength; flickGap: [shortest, longest] wait between flicks; max: the most any row may turn
+const TAIL = { swing: 0.3, beatSwing: 0.35, perBar: 1, idleSpeed: 0.9, dozeSpeed: 0.5, dozeSwing: 0.15, dozeCurl: 0.25,
+  lag: 1.8, flick: 0.85, flickGap: [7, 19], max: 1.05 };
+const tail = { amp: 0, curl: 0, ft: -1, fdir: 1, nextFlick: 9, mouthWas: 0, th: null, key: '', rows: [], strip: null, cv: {} };
+// first and last opaque column of each row of RGBA pixels d (w wide), -1 for an empty row
+function rowRuns(d, w, h) {
+  const L = [], R = [];
+  for (let r = 0; r < h; r++) {
+    let a = -1, b = -1;
+    for (let x = 0; x < w; x++) if (d[(r * w + x) * 4 + 3]) { if (a < 0) a = x; b = x; }
+    L[r] = a; R[r] = b;
   }
+  return [L, R];
+}
+// the straight strip and the rest spine it is laid along
+function tailStrip() {
+  const s = SPR['devon-tail'], sd = s.cv.getContext('2d').getImageData(0, 0, s.w, s.h).data, [sL, sR] = rowRuns(sd, s.w, s.h), xc = [];
+  let lastC = 0;
+  for (let r = 0; r < s.h; r++) { xc[r] = sL[r] < 0 ? xc[r - 1] : (sL[r] + sR[r] + 1) / 2; if (sL[r] >= 0) lastC = r; }
+  // the rest spine: the middle of each row of the curved tail, smoothed a little so a lopsided row does not kink it
+  const cx = xc.slice(0, lastC + 1).map((v, r, a) => r === 0 || r === lastC ? v : (a[r - 1] + 2 * v + a[r + 1]) / 4);
+  let w, h, d, axis;
+  if (ART.tail) {
+    const c = document.createElement('canvas'); w = c.width = ART.tail.img.naturalWidth; h = c.height = ART.tail.img.naturalHeight;
+    const cc = c.getContext('2d'); cc.drawImage(ART.tail.img, 0, 0); d = cc.getImageData(0, 0, w, h).data;
+    // its middle: scene.json's axis, else the average middle of its rows
+    const [L, R] = rowRuns(d, w, h), mid = L.flatMap((a, r) => a < 0 ? [] : [(a + R[r] + 1) / 2]);
+    axis = ART.tail.axis ?? (mid.length ? mid.reduce((a, b) => a + b) / mid.length : w / 2);
+  } else {
+    // no straight tail: each row of the curved one moved onto the middle column
+    w = s.w; h = s.h; axis = w / 2; d = new Uint8ClampedArray(w * h * 4);
+    for (let r = 0; r <= lastC; r++) for (let x = sL[r]; x >= 0 && x <= sR[r]; x++) {
+      const X = x - Math.round(cx[r] - axis);
+      if (X >= 0 && X < w) for (let k = 0; k < 4; k++) d[(r * w + X) * 4 + k] = sd[(r * s.w + x) * 4 + k];
+    }
+  }
+  const [L, R] = rowRuns(d, w, h);
+  let last = 0;
+  for (let r = 0; r < h; r++) if (L[r] >= 0) last = r;
+  // a strip longer than the curved tail carries on in the direction of its tip
+  for (let r = lastC + 1; r <= last; r++) cx[r] = cx[r - 1] + (cx[lastC] - cx[lastC - 1]);
+  // per segment r-1 -> r: its rest angle (0 = straight down) and length; per row: its rest angle, and o, the shift that
+  // puts the strip's column c at column c + o of the curved tail at rest
+  const ang = [0], len = [1], rho = [], o = [];
+  for (let r = 1; r <= last; r++) { const dx = cx[r] - cx[r - 1]; ang[r] = -Math.atan(dx); len[r] = Math.hypot(dx, 1); }
+  ang[0] = ang[1] || 0;
+  for (let r = 0; r <= last; r++) { rho[r] = (ang[r] + ang[Math.min(last, r + 1)]) / 2; o[r] = Math.round(cx[r] - axis); }
+  return { w, h, d, last, L, R, cx, ang, len, rho, o };
+}
+// the tail's rows for tail.th: [y, strip row, then strip column per output x from x0], y and x in sprite pixels
+function tailRows() {
+  const { L, R, cx, ang, len, rho, o, last } = tail.strip, th = tail.th, P = [];
+  // the bent spine, kept as its offset from the rest spine, so at rest it is the rest spine exactly
+  let dx = 0, dy = 0;
+  for (let r = 0; r <= last; r++) {
+    if (r >= TAIL_FIXED) { const a = ang[r], b = a + (th[r] + th[r - 1]) / 2; dx += len[r] * (Math.sin(a) - Math.sin(b)); dy += len[r] * (Math.cos(b) - Math.cos(a)); }
+    P[r] = [cx[r] + dx, r + 0.5 + dy];
+  }
+  // a row whose middle is at x, turned m from its rest angle: column c sits e(c) from the middle at rest, k times that
+  // now. A row tilted near flat would widen without end, so the widening stops at TAIL.max.
+  const rows = [], row = (y, r, x, m) => {
+    if (L[r] < 0) return;
+    const k = Math.cos(rho[r]) / Math.cos(clamp(rho[r] + m, -TAIL.max, TAIL.max)), e = c => c + 0.5 + o[r] - cx[r];
+    const x0 = Math.floor(x + e(L[r]) * k), x1 = Math.floor(x + e(R[r]) * k), cols = [];
+    for (let X = x0; X <= x1; X++) cols.push(X === x0 ? L[r] : X === x1 ? R[r] : clamp(Math.round((X + 0.5 - x) / k + cx[r] - o[r] - 0.5), L[r] + 1, R[r] - 1));
+    rows.push([y, r, x0, cols]);
+  };
+  for (let r = 0; r < Math.min(TAIL_FIXED, last + 1); r++) row(r, r, P[r][0], 0);
+  // below the fixed rows each output row takes the strip row whose bent spine crosses it; the last row is the tip
+  const end = Math.round(P[last][1] - 0.5);
+  for (let y = TAIL_FIXED, t = TAIL_FIXED - 1; y <= end; y++) {
+    const yc = y + 0.5; while (t < last && P[t + 1][1] < yc) t++;
+    const t1 = Math.min(last, t + 1), f = t1 === t ? 0 : clamp((yc - P[t][1]) / (P[t1][1] - P[t][1]), 0, 1);
+    row(y, y === end ? last : Math.min(last - 1, Math.round(t + f)), P[t][0] + (P[t1][0] - P[t][0]) * f, th[t] + (th[t1] - th[t]) * f);
+  }
+  return rows;
+}
+// the bent tail in one light, redrawn only when its pixels move. Lamp off, each pixel takes the light where it is now.
+function tailCanvas(light) {
+  const S = tail.strip, s = SPR['devon-tail'];
+  let c = tail.cv[light];
+  if (!c) { const cv = document.createElement('canvas'); cv.width = s.w + 2 * TAIL_PAD; cv.height = Math.max(s.h, S.h) + TAIL_PAD; c = tail.cv[light] = { cv, key: null }; }
+  if (c.key === tail.key) return c.cv;
+  const w = c.cv.width, img = new ImageData(w, c.cv.height), o = img.data, d = S.d;
+  for (const [y, r, x0, cols] of tail.rows) cols.forEach((sx, i) => {
+    const X = x0 + i + TAIL_PAD, k = (y * w + X) * 4, j = (r * S.w + sx) * 4;
+    if (X < 0 || X >= w || y >= c.cv.height || !d[j + 3]) return;
+    o[k] = d[j]; o[k + 1] = d[j + 1]; o[k + 2] = d[j + 2]; o[k + 3] = d[j + 3];
+    if (light !== 'lit') relit(o, k, s.x + x0 + i, s.y + y, light);
+  });
+  c.cv.getContext('2d').putImageData(img, 0, 0); c.key = tail.key;
+  return c.cv;
+}
+function drawTail(light) {
+  const s = SPR['devon-tail'];
+  if (!tail.th) { g.drawImage(lit('devon-tail', light), s.x, s.y); return; }
+  g.drawImage(tailCanvas(light), s.x - TAIL_PAD, s.y);
+}
+// the tail's pose: a swing of amp radians that travels down from the root (the tip lags, so it whips through each turn),
+// plus curl, which hooks only the lower half toward the tip
+function poseTail(ph) {
+  const S = tail.strip || (tail.strip = tailStrip()), th = tail.th || (tail.th = new Float64Array(S.last + 1));
+  for (let r = 0; r <= S.last; r++) {
+    const u = clamp((r - TAIL_FIXED + 1) / (S.last - TAIL_FIXED + 1), 0, 1);
+    th[r] = clamp(tail.amp * u ** 1.3 * Math.sin(ph - TAIL.lag * u) + tail.curl * Math.max(0, (u - 0.5) / 0.5) ** 2, -TAIL.max, TAIL.max);
+  }
+  tail.rows = tailRows();
+  tail.key = tail.rows.map(([y, r, x0, cols]) => y + ':' + r + ':' + x0 + ':' + cols.join('.')).join('|');
 }
 
 /* =====================================================================
@@ -2292,10 +2414,27 @@ function update(dt) {
   { const tgt = 0.5 * BEAT.kick + 0.5 * BEAT.chord; BEAT.glow += (tgt - BEAT.glow) * Math.min(1, dt * (tgt > BEAT.glow ? 30 : 5)); }
   const D = cats.devon, S = cats.sph;
   S.tap = Math.max(0, S.tap - dt * 4); S.ear = Math.max(0, S.ear - dt);
-  // the Devon's tail sways once per bar while the music plays, drifting into step instead of jumping
-  { const locked = playing && ST.beat > 0 && BEAT.barDur > 0;
-    swayPh += dt * (locked ? 2 * Math.PI / BEAT.barDur : 1.5);
-    if (locked) { let err = (2 * Math.PI * BEAT.pos - swayPh) % (2 * Math.PI); if (err > Math.PI) err -= 2 * Math.PI; else if (err < -Math.PI) err += 2 * Math.PI; swayPh += err * Math.min(1, dt * 3); } }
+  // the Devon's tail swings once per bar while the music plays, drifting into step instead of jumping, wider with more
+  // motion; without music a lazy sway, and a small slow one while it is petted. Now and then, and when the Devon speaks,
+  // the tip flicks: a quick hook that springs back. Reduced motion halves the swing and drops the flicks.
+  { const locked = playing && ST.beat > 0 && BEAT.barDur > 0, dozing = D.doze > 0;
+    swayPh += dt * (locked ? 2 * Math.PI * TAIL.perBar / BEAT.barDur : dozing ? TAIL.dozeSpeed : TAIL.idleSpeed);
+    if (locked) { let err = (2 * Math.PI * TAIL.perBar * BEAT.pos - swayPh) % (2 * Math.PI); if (err > Math.PI) err -= 2 * Math.PI; else if (err < -Math.PI) err += 2 * Math.PI; swayPh += err * Math.min(1, dt * 3); }
+    const amp = (dozing ? TAIL.dozeSwing : TAIL.swing + (locked ? TAIL.beatSwing * ST.beat : 0)) * (CALM ? 0.5 : 1);
+    tail.amp += (amp - tail.amp) * Math.min(1, dt * 1.5);
+    if (D.mouth > tail.mouthWas || (!dozing && time > tail.nextFlick)) {
+      if (!CALM && tail.ft < 0) { tail.ft = 0; tail.fdir = Math.random() < 0.5 ? -1 : 1; }
+      tail.nextFlick = time + TAIL.flickGap[0] + Math.random() * (TAIL.flickGap[1] - TAIL.flickGap[0]);
+    }
+    tail.mouthWas = D.mouth;
+    let curl = dozing ? TAIL.dozeCurl : 0;
+    if (tail.ft >= 0) {
+      const t = tail.ft += dt;
+      curl += tail.fdir * TAIL.flick * (t < 0.1 ? Math.sin(Math.PI / 2 * t / 0.1) : Math.exp(-(t - 0.1) * 6) * Math.cos((t - 0.1) * 8));
+      if (t > 0.9) tail.ft = -1;
+    }
+    tail.curl += (curl - tail.curl) * Math.min(1, dt * (tail.ft >= 0 ? 30 : 3));
+    if (SPR['devon-tail']) poseTail(swayPh); }
   D.nod = Math.max(0, D.nod - dt * 3.5);
   // breathing: in for a third of the cycle, out for half, then a rest; slower while dozing
   for (const c of [D, S]) {
@@ -2452,7 +2591,7 @@ function draw() {
     const db = SPR['devon-body'], fixed = DEVON_BODY_FIXED - db.y;
     g.drawImage(lit('devon-body', L), 0, fixed, db.w, db.h - fixed, db.x, DEVON_BODY_FIXED, db.w, db.h - fixed);
     const n = 'sph-body' + (S.br > 0.5 ? '-in' : ''); g.drawImage(lit(n, L), SPR[n].x, SPR[n].y);
-    drawTail(swayPh, L);
+    drawTail(L);
   }
   g.globalAlpha = 1;
 

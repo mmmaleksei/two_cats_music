@@ -217,7 +217,8 @@
   "devon": 77,
   "sph": 136
  },
- "note": "Draw back to front: outside, room (transparent glass), cat bodies and the Devon's tail, heads. Positions are the rest pose in scene pixels (top-left). Draw room, bodies, tail, heads. Bodies hold 3 hidden neck rows under each head. '-in' bodies are the in-breath frame; flick heads drop one ear tip by 2 px.",
+ "note": "Draw back to front: outside, room (transparent glass), cat bodies and the Devon's tail, heads. Positions are the rest pose in scene pixels (top-left). Draw room, bodies, tail, heads. Bodies hold 3 hidden neck rows under each head. '-in' bodies are the in-breath frame; flick heads drop one ear tip by 2 px. The Devon's tail is drawn from `tail`: its file is the tail drawn straight down (its middle found from its rows, or given as `axis`); the page bends it along the rest shape of devon-tail, which is not drawn.",
  "props": [{ "file": "desk-photo.png", "at": [324, 135] }, { "file": "desk-photo-face.png", "at": [341, 142], "scale": 2 }],
- "version": "d149c4bdcb"
+ "tail": { "file": "tail.png" },
+ "version": "3320652fb0"
 }
