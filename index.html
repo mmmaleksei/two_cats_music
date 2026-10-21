@@ -164,7 +164,7 @@ select{font:inherit;color:var(--ink);background:#211926;color-scheme:dark;border
         </div>
         <div><span class="setting-label" id="layers-label">mix</span><div class="mix"><div class="seg" id="layers" role="group" aria-label="Instruments">
           <button data-v="keys">keys</button><button data-v="bass">bass</button><button data-v="drums">drums</button><button data-v="melody">melody</button>
-        </div><div class="seg" id="licks"><button data-v="licks" aria-label="Jazz licks" title="1-2 short jazz licks per track">jazz</button></div></div></div>
+        </div><div class="seg" id="licks"><button data-v="licks" aria-label="Jazz licks" title="a soft call-and-response jazz lick that returns with variations">jazz</button></div></div></div>
       </div>
       <div id="settings-room" role="tabpanel" aria-labelledby="tab-room" hidden>
         <div class="pair room-pair">
@@ -243,7 +243,7 @@ const ST = Object.assign({
   layers: { keys: true, bass: true, drums: true, melody: true },
   licks: true
 }, (() => { try { return JSON.parse(localStorage.getItem('lofisy') || '{}'); } catch (e) { return {}; } })());
-function save() { try { localStorage.setItem('lofisy', JSON.stringify(ST)); } catch (e) {} }
+function save() { try { localStorage.setItem('lofisy', JSON.stringify(Object.assign({}, ST, { rain: ST.rain && !autoRain }))); } catch (e) {} }
 
 /* =====================================================================
    Pixel helpers
@@ -296,10 +296,33 @@ function env(p, t, att, peak, sus, dtc, end, rtc) {
   p.setTargetAtTime(sus, t + att, dtc); p.setTargetAtTime(0, Math.max(end, t + att + 0.002), rtc);
 }
 function satCurve(k) { const n = 2048, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / Math.tanh(k); } return c; }
+/* Reverb with a single convolver: Firefox renders every long ConvolverNode at full cost, so the
+   room and hall impulses are mixed into one buffer per track. On a track change the new mix takes
+   over the input at the track's first beat; the old convolver lets its tail ring out, then goes. */
+let VERB = null;
+function setVerbMix(hall, t) {
+  const V = VERB, sr = AC.sampleRate, len = V.hall.chs[0].length, b = AC.createBuffer(2, len, sr);
+  const kh = hall * V.hall.scale, kr = (1 - hall) * V.room.scale;
+  for (let ch = 0; ch < 2; ch++) {
+    const d = b.getChannelData(ch), h = V.hall.chs[ch], r = V.room.chs[ch];
+    for (let i = 0; i < len; i++) d[i] = h[i] * kh + (i < r.length ? r[i] * kr : 0);
+  }
+  const conv = AC.createConvolver(); conv.normalize = false; conv.buffer = b;
+  const inG = G(V.slot ? 0 : 1); verbIn.connect(inG); inG.connect(conv); conv.connect(V.out);
+  const old = V.slot, at = Math.max(t, AC.currentTime);
+  if (old) {
+    inG.gain.setValueAtTime(0, at); inG.gain.linearRampToValueAtTime(1, at + 0.05);
+    old.inG.gain.setValueAtTime(1, at); old.inG.gain.linearRampToValueAtTime(0, at + 0.05);
+    setTimeout(() => { old.inG.disconnect(); old.conv.disconnect(); }, (at - AC.currentTime + len / sr + 0.5) * 1000);
+  }
+  V.slot = { conv, inG };
+}
 function loopify(d, F) { const len = d.length; for (let i = 0; i < F; i++) { const a = i / F; d[i] = d[i] * a + d[len - F + i] * (1 - a); } }
 
 function initAudio() {
-  AC = new (window.AudioContext || window.webkitAudioContext)();
+  // 'playback' = a larger output buffer; Firefox's default one is small enough to crackle under load
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  try { AC = new Ctx({ latencyHint: 'playback' }); } catch (e) { AC = new Ctx(); }
   const sr = AC.sampleRate;
   master = G(ST.vol);
   comp = AC.createDynamicsCompressor();
@@ -326,19 +349,23 @@ function initAudio() {
   satOut.connect(dryG); dryG.connect(mlp); satOut.connect(crush); crush.connect(crushG); crushG.connect(mlp);
   mlp.connect(hp); hp.connect(shelf); shelf.connect(comp);
 
-  // reverb: a small room and a large hall, mixed per track
+  // reverb: a small room and a large hall, mixed per track into ONE convolver (see setVerbMix)
   const impulse = (sec, decay) => {
-    const len = Math.floor(sr * sec), b = AC.createBuffer(2, len, sr);
-    for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let z = 0; const pre = Math.floor(sr * 0.018);
-      for (let i = pre; i < len; i++) { const t = i / len; z += ((Math.random() * 2 - 1) * Math.pow(1 - t, decay) - z) * (0.85 - 0.6 * t); d[i] = z; } }
-    return b;
+    const len = Math.floor(sr * sec), chs = [];
+    for (let ch = 0; ch < 2; ch++) { const d = new Float32Array(len); let z = 0; const pre = Math.floor(sr * 0.018);
+      for (let i = pre; i < len; i++) { const t = i / len; z += ((Math.random() * 2 - 1) * Math.pow(1 - t, decay) - z) * (0.85 - 0.6 * t); d[i] = z; }
+      chs.push(d); }
+    // the scale a normalizing ConvolverNode would apply, so levels match the old two-convolver mix
+    let e = 0; for (const d of chs) for (let i = 0; i < len; i++) e += d[i] * d[i];
+    const scale = 1 / Math.max(Math.sqrt(e / (2 * len)), 0.000125) * 0.00125 * 44100 / sr;
+    return { chs, scale };
   };
-  const room = AC.createConvolver(), hall = AC.createConvolver();
-  room.buffer = impulse(1.3, 3); hall.buffer = impulse(3.4, 2.2);
-  const roomG = G(0.5), hallG = G(0.5);
-  verbIn = G(1); const verbOut = G(0.55);
-  verbIn.connect(room); verbIn.connect(hall); room.connect(roomG); hall.connect(hallG); roomG.connect(verbOut); hallG.connect(verbOut); verbOut.connect(lofiIn);
-  FX = { l1g, l2g, satIn, satOut, crushG, dryG, roomG, hallG, verbOut, tapeDly, tapeG };
+  verbIn = G(1); const verbOut = G(0.55); verbOut.connect(lofiIn);
+  // the hall used to be 3.4 s; 2.4 s with the same total energy (sqrt of the length ratio)
+  VERB = { room: impulse(1.3, 3), hall: impulse(2.4, 2.2), out: verbOut, slot: null };
+  VERB.hall.scale *= Math.sqrt(3.4 / 2.4);
+  FX = { l1g, l2g, satIn, satOut, crushG, dryG, verbOut, tapeDly, tapeG };
+  setVerbMix(0.5, AC.currentTime);
 
   // dotted-eighth delay
   dly = AC.createDelay(2); dly.delayTime.value = 60 / ST.bpm * 0.75;
@@ -363,18 +390,23 @@ function initAudio() {
   snVerb = G(0.11); snVerb.connect(busG.drums.gain ? verbIn : verbIn);
 
   melIn = G(1); busG.melody = G(ST.layers.melody ? 1 : 0); melIn.connect(busG.melody); busG.melody.connect(lofiIn);
-  lickIn = G(ST.licks ? 1 : 0); lickIn.connect(melIn);
+  lickIn = G(ST.licks ? 1 : 0); const lickLp = BQ('lowpass', 2800, 0.5); lickIn.connect(lickLp); lickLp.connect(melIn);
   const md = G(0.32), mv = G(0.4); busG.melody.connect(md); md.connect(dlyIn); busG.melody.connect(mv); mv.connect(verbIn);
 
   // noise source
   noiseBuf = AC.createBuffer(1, sr * 2, sr);
   { const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  // a whisper of noise (~-340 dB, far below any output resolution) keeps feedback loops, filters and
+  // reverb tails from decaying into denormal floats, which are very slow on some audio threads
+  { const n = AC.createBufferSource(); n.buffer = noiseBuf; n.loop = true; const g = G(1e-17); n.connect(g);
+    for (const d of [lofiIn, verbIn, dlyIn, duck, keysIn, bassIn, drumIn, melIn]) g.connect(d); n.start(); }
 
   // vinyl crackle + hiss
   { const len = sr * 6, b = AC.createBuffer(2, len, sr);
     for (let ch = 0; ch < 2; ch++) {
       const d = b.getChannelData(ch); let z = 0;
-      for (let i = 0; i < len; i++) { z += (Math.random() * 2 - 1 - z) * 0.25; d[i] = z * 0.03; }
+      // hiss 4 dB under the original 0.03 level; the crackle below keeps its level
+      for (let i = 0; i < len; i++) { z += (Math.random() * 2 - 1 - z) * 0.25; d[i] = z * 0.019; }
       for (let k = 0; k < 6 * 13; k++) {
         const pos = Math.floor(Math.random() * (len - 20)), amp = Math.pow(Math.random(), 3) * 0.5 + 0.03, L = 2 + Math.floor(Math.random() * 9), sg = Math.random() < 0.5 ? -1 : 1;
         for (let j = 0; j < L; j++) d[pos + j] += sg * amp * (1 - j / L) * (j % 2 ? -0.6 : 1);
@@ -868,6 +900,24 @@ function riser(t, dur) {
   n.connect(bp); bp.connect(g); g.connect(drumIn);
   n.start(t, Math.random()); n.stop(t + dur + 0.1);
 }
+/* Deferred voices: a bar is composed in one go, but its notes are handed to the audio graph only
+   when they are due within the scheduler's lookahead (~0.3 s). Firefox keeps processing nodes that
+   are waiting to start, and a burst of hundreds of new nodes per bar can make its audio thread
+   miss a deadline; small batches every 40 ms avoid both. */
+let noteQ = [];
+const qAhead = () => document.hidden ? 1.6 : 0.3;
+const deferVoice = fn => (t, ...a) => { if (!AC || t <= AC.currentTime + qAhead()) fn(t, ...a); else noteQ.push([t, fn, a]); };
+function flushNotes() {
+  if (!noteQ.length) return;
+  const until = AC.currentTime + qAhead(), due = [], keep = [];
+  for (const e of noteQ) (e[0] <= until ? due : keep).push(e);
+  noteQ = keep; due.sort((x, y) => x[0] - y[0]);
+  for (const [t, fn, a] of due) fn(t, ...a);
+}
+ep = deferVoice(ep); wurli = deferVoice(wurli); feltPiano = deferVoice(feltPiano); nylon = deferVoice(nylon);
+padVoice = deferVoice(padVoice); vibes = deferVoice(vibes); kalimba = deferVoice(kalimba); sineLead = deferVoice(sineLead);
+flute = deferVoice(flute); bassNote = deferVoice(bassNote); kick = deferVoice(kick); back = deferVoice(back);
+hat = deferVoice(hat); shaker = deferVoice(shaker); tambourine = deferVoice(tambourine); riser = deferVoice(riser);
 function makeKit() {
   const r = Math.random(), back = r < 0.35 ? 'snare' : r < 0.6 ? 'rim' : r < 0.8 ? 'clap' : 'brush';
   const l = Math.random(), layer = l < 0.55 ? null : l < 0.85 ? 'shaker' : 'tamb';
@@ -1090,7 +1140,7 @@ function applyChar(c, t) {
   set(FX.satIn.gain, c.drive); set(FX.satOut.gain, 1 / Math.sqrt(c.drive));
   set(FX.crushG.gain, c.crush); set(FX.dryG.gain, 1 - c.crush);
   set(FX.klp.frequency, c.keys);
-  set(FX.verbOut.gain, c.wet); set(FX.hallG.gain, c.hall); set(FX.roomG.gain, 1 - c.hall);
+  set(FX.verbOut.gain, c.wet); setVerbMix(c.hall, t);
 }
 function makeSong() {
   const ch = makeChar(), CUT = ch.cut;
@@ -1283,16 +1333,28 @@ function melNote(e, bar, s) {
 }
 
 /* ---------- jazz licks ----------
-   1-2 short approach phrases per track, after the FIMT approach to jazz phrasing: a chord-tone
-   skeleton (3rds and 7ths) dressed with enclosures, chromatic approach or an arpeggio, and only
-   on a V->I resolution a diminished or altered cell. A lick sits in a gap of the melody and lands
-   on a guide tone of the next chord, or on the melody's own first note if the next bar opens
-   with one (then the melody plays that note and the lick only leads into it).
-   ?licks=0|1|2 in the URL forces the count (for auditioning). */
-const LICK_FORCE = (() => { const v = new URLSearchParams(location.search).get('licks'); return v == null ? null : clamp(Math.round(+v) || 0, 0, 2); })();
-const DOM_Q = new Set(['d9', 'd13', 'b9']);
+   One lick idea per track, after the FIMT approach to jazz phrasing, built as call and response.
+   The call closes one 2-bar phrase: a soft 16th-note line of scale steps and chord-tone skips
+   (chord tones on the beats) that stops on an open colour tone (9th, 5th or 6th). Two bars later the
+   response echoes the call's opening rhythm with the contour turned around and resolves through an
+   enclosure or chromatic approach onto a guide tone (3rd or 7th) of the next chord - or onto the
+   melody's own first note when the next bar opens with one. The line is kept as scale moves, so it
+   re-fits whatever chords it lands on; the idea returns later in the track with small variations.
+   Licks only sit in gaps of the melody. ?licks=0..3 in the URL forces the number of pairs. */
+const LICK_FORCE = (() => { const v = new URLSearchParams(location.search).get('licks'); return v == null ? null : clamp(Math.round(+v) || 0, 0, 3); })();
 const NOTE_N = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 const noteName = m => NOTE_N[m % 12] + (Math.floor(m / 12) - 1);
+// call rhythms: onsets in 16ths from the start of the lick; the last note is held
+const LICK_RH = [[0, 1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 4, 6], [0, 2, 3, 4, 5, 6], [0, 1, 2, 4, 5, 6, 7], [0, 1, 2, 3, 5, 6, 7]];
+const LICK_HOLD = 3;
+// melodic cells as moves [onChordTones, steps]: scale runs, a turn, arpeggios, a skip
+const LICK_CELLS = {
+  up: [[0, 1], [0, 1], [0, 1]], down: [[0, -1], [0, -1], [0, -1]], turn: [[0, 1], [0, -1], [0, -1]],
+  arpUp: [[1, 1], [1, 1], [1, 1]], arpDown: [[1, -1], [1, -1], [1, -1]], skip: [[0, 2], [0, -1], [0, 1]]
+};
+const LICK_RISE = ['up', 'arpUp', 'skip'];
+// approach notes into the target T (u1/u2 = one/two scale steps above T)
+const LICK_APPR = { enclosure: 0.35, encChrom: 0.25, chromUp: 0.2, chromDown: 0.2 };
 // melody notes of one bar as [{s, d, m}] in bar steps
 function barMelody(bar, variants, answer) {
   if (!bar || !bar.m) return [];
@@ -1304,81 +1366,144 @@ function guidePcs(bar) {
   const sev = iv.includes(10) ? 10 : iv.includes(11) ? 11 : iv.includes(9) ? 9 : 7;
   return [iv[1], sev].map(x => (base + x) % 12);
 }
-function nearestPc(pc, ref, lo = 62, hi = 81) {
-  let best = null;
-  for (let m = lo; m <= hi; m++) if (m % 12 === pc && (best === null || Math.abs(m - ref) < Math.abs(best - ref))) best = m;
-  return best;
-}
-// pre-notes [[step, midi], ...] leading into `T` on step 16; null when the shape does not fit
-function lickShape(type, bar, next, T) {
-  const P = next.pool.pool, up = P.find(m => m > T) ?? T + 2, lo = P.slice().reverse().find(m => m < T) ?? T - 2;
-  if (type === 'enclosure') return [[12, up], [14, lo]];
-  if (type === 'chromatic') return Math.random() < 0.5 ? [[12, up], [14, T - 1]] : [[10, T + 2], [12, T + 1], [14, T - 1]];
-  if (type === 'approach') { const d = Math.random() < 0.6 ? 1 : -1; return [3, 2, 1].map((k, i) => [12 + i * 4 / 3, T + k * d]); }
-  if (type === 'arpeggio') {
-    const pcs = new Set(QUAL[bar.q].map(x => (bar.kr + bar.root + x) % 12)), tones = [];
-    for (let m = T - 15; m < T; m++) if (pcs.has(m % 12)) tones.push(m);
-    const top = tones.filter(m => m >= T - 4).pop();
-    if (top === undefined) return null;
-    const run = tones.slice(0, tones.indexOf(top) + 1).slice(-4);
-    return run.length === 4 ? run.map((m, i) => [8 + i * 2, m]) : null;
+// scale (melody pool pitch classes) and chord tones at a step of the bar, over a wide range;
+// under a second chord of the bar: its chord tones plus the pool notes that do not rub against them
+function lickScale(bar, st = 0) {
+  const p = bar.passing && bar.passing.filter(x => st >= x.at).pop();
+  let pcs = new Set(bar.pool.pool.map(m => m % 12)), ct = bar.pool.ct, root = (bar.kr + bar.root) % 12;
+  if (p) {
+    ct = p.ct; root = (bar.kr + p.root) % 12;
+    const near = pc => [...ct].some(c => (pc - c + 12) % 12 === 1 || (c - pc + 12) % 12 === 1);
+    pcs = new Set([...ct, ...[...pcs].filter(pc => !near(pc))]);
   }
-  // V -> I only; T is the 5th of the tonic (= root of the dominant)
-  if (type === 'dim') return [-8, -5, -2, 1].map((x, i) => [8 + i * 2, T + x]);
-  if (type === 'alt') return [8, 3, 1].map((x, i) => [10 + i * 2, T + x]);
+  const sc = [], ch = [];
+  for (let m = 50; m <= 98; m++) if (pcs.has(m % 12)) { sc.push(m); if (ct.has(m % 12)) ch.push(m); }
+  return { pcs, ct, sc, ch, root };
+}
+function nearestIn(list, m) { let best = list[0]; for (const x of list) if (Math.abs(x - m) < Math.abs(best - m)) best = x; return best; }
+function along(list, m, n) { const i = list.indexOf(nearestIn(list, m)); return list[clamp(i + n, 0, list.length - 1)]; }
+// nearest chord tone, keeping the direction of the line (never a repeat of the previous note)
+function snapCt(S, m, prev) {
+  const up = S.ch.find(x => x > m), dn = S.ch.slice().reverse().find(x => x < m);
+  const cands = (prev == null ? [up, dn] : m >= prev ? [up, dn] : [dn, up]).filter(x => x != null && x !== prev);
+  return cands.sort((a, b) => Math.abs(a - m) - Math.abs(b - m))[0] ?? m;
+}
+const lickMove = (S, m, [c, n], sgn) => along(c ? S.ch : S.sc, m, n * sgn);
+function lickSpans(id) { return { call: id.rh[id.rh.length - 1] + LICK_HOLD, resp: id.rh[4] + 1 + (id.appr === 'enclosure' ? 2 : 3) }; }
+function lickVel(st) { return 0.3 + (st % 4 === 0 ? 0.07 : st % 2 ? -0.05 : 0) + Math.random() * 0.04; }
+function makeLickIdea() {
+  const rh = pick(LICK_RH), first = pick(Object.keys(LICK_CELLS)), last = pick(LICK_RISE);
+  const moves = LICK_CELLS[first].concat(LICK_CELLS[last]).slice(0, rh.length - 1);
+  return { rh, moves, appr: wpick(LICK_APPR), reg: 62 + Math.floor(Math.random() * 6), guide: Math.random() < 0.7 ? 0 : 1, tag: first + '+' + last };
+}
+// the idea once more, with one or two small changes
+function varyLick(id) {
+  const v = { rh: id.rh.slice(), moves: id.moves.map(x => x.slice()), appr: id.appr, reg: id.reg, guide: id.guide, tag: id.tag, changes: [] };
+  const opts = ['note', 'appr', 'land', 'reg'];
+  if (v.rh.length > 6) opts.push('rest');
+  for (const c of [pick(opts), Math.random() < 0.5 ? pick(opts) : null]) {
+    if (!c || v.changes.includes(c)) continue;
+    v.changes.push(c);
+    if (c === 'note') { const k = 1 + Math.floor(Math.random() * (v.moves.length - 1)), mv = v.moves[k]; mv[1] = mv[1] === 1 || mv[1] === -1 ? (Math.random() < 0.5 ? -mv[1] : mv[1] * 2) : Math.sign(mv[1]); }
+    if (c === 'appr') v.appr = pick(Object.keys(LICK_APPR).filter(x => x !== v.appr));
+    if (c === 'land') v.guide = 1 - v.guide;
+    if (c === 'reg') v.reg += pick([-2, 2]);
+    // a 16th rest inside the line (never in the opening the response echoes)
+    if (c === 'rest') { const k = 5 + Math.floor(Math.random() * (v.rh.length - 6)); v.rh.splice(k, 1); v.moves.splice(k - 1, 1); }
+  }
+  return v;
+}
+function lickCall(bar, id) {
+  const start = 16 - lickSpans(id).call;
+  let m = nearestIn(lickScale(bar, start).ch, id.reg);
+  const notes = [];
+  id.rh.forEach((o, k) => {
+    const st = start + o, lastN = k === id.rh.length - 1, S = lickScale(bar, st), prev = m;
+    if (k) m = lickMove(S, m, id.moves[k - 1], 1);
+    if (!lastN && st % 4 === 0 && !S.ct.has(m % 12)) m = snapCt(S, m, k ? prev : null);
+    if (lastN) {
+      const open = [2, 7, 9].map(x => (S.root + x) % 12).filter(pc => S.pcs.has(pc));
+      m = nearestIn(S.sc.filter(x => open.includes(x % 12)), m) ?? m;
+    }
+    notes.push({ s: st, m, d: lastN ? LICK_HOLD : 1, v: lastN ? 0.36 : lickVel(st) });
+  });
+  return notes.every(n => n.m >= 57 && n.m <= 88) ? notes : null;
+}
+function lickResp(bar, next, id, land) {
+  const N = lickScale(next), sp = lickSpans(id), start = 16 - sp.resp, Sat = k => lickScale(bar, start + id.rh[k]);
+  const body = id.rh.slice(0, 5), bmoves = id.moves.slice(0, 4);
+  // descending response (the call's opening moves turned around) comes into the approach from above
+  const fromAbove = bmoves[3][1] > 0;
+  const Ts = land != null ? [land] : guidePcs(next).flatMap((pc, gi) => [0, 1, 2, 3, 4, 5, 6].map(o => ({ m: 48 + pc + o * 12, gi })))
+    .filter(x => x.m >= 60 && x.m <= 84).sort((a, b) => (a.gi !== id.guide) - (b.gi !== id.guide) || Math.abs(a.m - id.reg) - Math.abs(b.m - id.reg)).map(x => x.m);
+  for (const T of Ts) {
+    const u1 = N.sc.find(x => x > T) ?? T + 2, u2 = N.sc.find(x => x > u1) ?? u1 + 2;
+    const appr = { enclosure: [u1, T - 1], encChrom: [T + 2, T + 1, T - 1], chromUp: [T - 3, T - 2, T - 1], chromDown: [u2, u1, T + 1] }[id.appr];
+    const bm = new Array(5);
+    const S4 = Sat(4);
+    bm[4] = fromAbove ? S4.sc.find(x => x > appr[0]) : S4.sc.slice().reverse().find(x => x < appr[0]);
+    for (let k = 4; k > 0; k--) bm[k - 1] = lickMove(Sat(k - 1), bm[k], bmoves[k - 1], 1);
+    const notes = body.map((o, k) => {
+      const st = start + o, S = Sat(k); let m = bm[k];
+      if (k < 4 && st % 4 === 0 && !S.ct.has(m % 12)) m = snapCt(S, m, k ? bm[k - 1] : null);
+      return { s: st, m, d: 1, v: lickVel(st) };
+    });
+    appr.forEach((m, k) => notes.push({ s: 16 - appr.length + k, m, d: 1, v: lickVel(16 - appr.length + k) }));
+    if (land == null) notes.push({ s: 16, m: T, d: 4, v: 0.38 });
+    if (notes.every(n => n.m >= 57 && n.m <= 88)) return { notes, T };
+  }
   return null;
 }
 function planLicks(bars, variants, answer) {
-  const want = LICK_FORCE ?? (Math.random() < 0.6 ? 1 : 2), out = {};
+  const want = LICK_FORCE ?? wpick({ 1: 0.1, 2: 0.65, 3: 0.25 }) | 0, out = {};
   if (!want) return out;
-  const cands = [];
-  for (let i = 1; i < bars.length - 1; i++) {
-    const bar = bars[i], next = bars[i + 1];
-    if (!bar.d || !bar.b || bar.fill || !(next.d || next.m) || next.k === 0 || next.mod !== bar.mod) continue;
-    // a passing chord inside the lick span: approach shapes still work (they aim at the next chord), chord-based ones do not
-    const passLate = !!(bar.passing && bar.passing.some(p => p.at >= 8));
-    const mel = barMelody(bar, variants, answer), free = mel.length ? Math.max(...mel.map(e => e.s + e.d)) + 1 : 0;
-    if (free > 12) continue;
-    const nm = barMelody(next, variants, answer);
-    if (nm.some(e => e.s > 0 && e.s < 4) && !nm.some(e => e.s === 0)) continue;
-    const first = nm.find(e => e.s === 0), change = next.root !== bar.root || next.q !== bar.q;
-    const domRes = !passLate && !bar.passing && DOM_Q.has(bar.q) && next.root === (bar.root + 5) % 12;
-    cands.push({ i, free, passLate, land: first ? first.m : null, domRes, ref: mel.length ? mel[mel.length - 1].m : next.pool.pool[next.pool.anchor], w: 1 + (change ? 2 : 0) + (domRes ? 2 : 0) + (bar.m ? 1 : 0) });
-  }
-  const chosen = [];
-  while (chosen.length < want) {
-    const pool = cands.filter(c => chosen.every(o => Math.abs(o.i - c.i) >= 8 && bars[o.i].sec !== bars[c.i].sec));
-    if (!pool.length) break;
-    let r = Math.random() * pool.reduce((a, c) => a + c.w, 0), c = pool[0];
-    for (const x of pool) { r -= x.w; if (r <= 0) { c = x; break; } }
-    chosen.push(c);
-  }
-  for (const c of chosen) {
-    const bar = bars[c.i], next = bars[c.i + 1];
-    let type = null, T = null, shape = null;
-    if (c.domRes && c.land === null && c.free <= 8 && Math.random() < 0.3) {
-      type = Math.random() < 0.5 ? 'dim' : 'alt';
-      T = nearestPc((bar.kr + bar.root) % 12, c.ref, 64, 79);
-      shape = lickShape(type, bar, next, T);
-    } else {
-      const g = guidePcs(next).map(pc => nearestPc(pc, c.ref)).sort((a, b) => Math.abs(a - c.ref) - Math.abs(b - c.ref));
-      T = c.land ?? (Math.random() < 0.7 ? g[0] : g[1]);
-      const types = { enclosure: 0.3, chromatic: 0.3, approach: 0.2, arpeggio: 0.2 };
-      if (c.free > 8 || c.passLate) delete types.arpeggio;
-      for (let k = 0; k < 4 && !shape; k++) { type = wpick(types); shape = lickShape(type, bar, next, T); if (type === 'chromatic' && shape && shape[0][0] < c.free) shape = null; }
-      if (!shape) { type = 'enclosure'; shape = lickShape(type, bar, next, T); }
+  // first free step after the melody; a long last note may keep ringing under the lick
+  const free = bar => { const mel = barMelody(bar, variants, answer); return mel.length ? Math.max(...mel.map(e => e.s + Math.min(e.d, 3))) + 1 : 0; };
+  const usable = bar => bar && !bar.fill;
+  const idea = makeLickIdea(), occ = [];
+  // a return that does not fit anywhere gets another variation (a couple of tries)
+  for (let n = 0, tries = 0; n < want && tries < want + 3; tries++) {
+    const id = occ.length ? varyLick(idea) : idea, sp = lickSpans(id), cands = [];
+    for (let i = 1; i + 3 < bars.length; i++) {
+      const c = bars[i], r = bars[i + 2], nx = bars[i + 3];
+      if (r.sec !== c.sec || !usable(c) || !usable(r)) continue;
+      // the idea is stated early; each return comes at least 6 bars after the previous one
+      if (occ.length ? i < occ[occ.length - 1].i + 6 : i >= bars.length / 2) continue;
+      if (free(c) > 16 - sp.call || free(r) > 16 - sp.resp) continue;
+      if (!(nx.d || nx.m) || nx.k === 0 || nx.mod !== r.mod) continue;
+      const nm = barMelody(nx, variants, answer);
+      if (nm.some(e => e.s > 0 && e.s < 4) && !nm.some(e => e.s === 0)) continue;
+      // best at the end of a 2-bar phrase, so the call and the response each close one
+      let w = (1 + (c.m ? 1 : 0) + (nx.root !== r.root || nx.q !== r.q ? 1 : 0)) * (c.secBar % 2 ? 2 : 1);
+      if (occ.length) {
+        const f = occ[0].i, same = [0, 2, 3].every(k => bars[f + k].root === bars[i + k].root && bars[f + k].q === bars[i + k].q);
+        if (occ.some(o => bars[o.i].sec === c.sec)) w *= 0.3;
+        if (same) w += 4;
+      }
+      cands.push({ i, w });
     }
-    if (shape.some(([, m]) => m < 55 || m > 88)) continue;
-    const tri = type === 'approach';
-    const notes = shape.map(([st, m], k) => ({ s: st, m, d: tri ? 4 / 3 : 2, v: 0.5 + 0.05 * k }));
-    if (c.land === null) notes.push({ s: 16, m: T, d: 4, v: 0.6 });
-    out[c.i] = { type, target: T, notes };
+    // weighted pick; a spot where the line falls out of range is dropped and another one tried
+    let call = null, resp = null, c = null;
+    while (cands.length && !(call && resp)) {
+      let x = Math.random() * cands.reduce((a, c) => a + c.w, 0); c = cands[cands.length - 1];
+      for (const y of cands) { x -= y.w; if (x <= 0) { c = y; break; } }
+      cands.splice(cands.indexOf(c), 1);
+      const first = barMelody(bars[c.i + 3], variants, answer).find(e => e.s === 0);
+      call = lickCall(bars[c.i], id); resp = call && lickResp(bars[c.i + 2], bars[c.i + 3], id, first ? first.m : null);
+    }
+    if (!(call && resp)) { if (!occ.length) break; continue; }
+    out[c.i] = { role: 'call', notes: call, id };
+    out[c.i + 2] = { role: 'response', notes: resp.notes, target: resp.T, id };
+    occ.push({ i: c.i }); n++;
   }
   return out;
 }
 function logLicks(licks, bars, no) {
-  const k = Object.keys(licks);
-  console.info(`[licks] track ${no}: ` + (k.length ? k.map(i => `bar ${+i + 1}/${bars.length} ${licks[i].type} -> ${noteName(licks[i].target)}`).join(', ') : 'none'));
+  const k = Object.keys(licks).map(Number).sort((a, b) => a - b);
+  console.info(`[licks] track ${no}: ` + (k.length ? k.map(i => {
+    const L = licks[i], id = L.id;
+    return L.role === 'call' ? `bar ${i + 1}/${bars.length} call ${id.tag}${id.changes ? ' (var: ' + id.changes.join(', ') + ')' : ''}` : `bar ${i + 1} response ${id.appr} -> ${noteName(L.target)}`;
+  }).join(' | ') : 'none'));
 }
 function scheduleBar(t0) {
   if (!song || barIdx >= song.bars.length || skipFlag) {
@@ -1386,6 +1511,7 @@ function scheduleBar(t0) {
     const s = song; setTimeout(() => announce(s), Math.max(0, (t0 - AC.currentTime) * 1000));
     dly.delayTime.setTargetAtTime(60 / songBpm(song) * 0.75, t0, 0.3);
     applyChar(song.ch, t0);
+    planRain(t0, song.bars.length * 240 / songBpm(song));
   }
   const bar = song.bars[barIdx], next = song.bars[barIdx + 1], sd = 60 / songBpm(song) / 4, barDur = sd * 16;
   const T = s => t0 + s * sd + (s % 2 ? (song.swing - 0.5) * 2 * sd : 0);
@@ -1466,11 +1592,11 @@ function scheduleBar(t0) {
       });
     }
   }
-  // jazz lick in a melody gap, landing on the next bar's downbeat
+  // jazz lick (call or response) in a melody gap
   const lk = song.licks && song.licks[barIdx];
   if (lk) {
     const L = LEAD[song.lead];
-    for (const n of lk.notes) L.fn((Number.isInteger(n.s) ? T(n.s) : t0 + n.s * sd) + hum(0.008), n.m, n.d * sd * 0.9 + L.ring, n.v * L.g, lickIn, 0.15);
+    for (const n of lk.notes) L.fn(T(n.s) + hum(0.006), n.m, n.d * sd * 0.9 + L.ring * (n.d > 1 ? 1 : 0.35), n.v * L.g, lickIn, -0.1);
   }
   // optional tape stop over the end of the last bar, then a short silence before the next track
   let gap = 0;
@@ -1484,13 +1610,14 @@ function scheduleBar(t0) {
 }
 function tick() {
   if (!AC || !playing) return;
-  const ahead = document.hidden ? 1.6 : 0.3;
+  const ahead = qAhead();
   while (nextBarT < AC.currentTime + ahead) {
     const gap = scheduleBar(nextBarT) || 0;
     nextBarT += 60 / songBpm(song) * 4 + gap;
   }
   // nothing drains the queue while the tab is hidden
   if (vq.length > 400) vq.splice(0, vq.length - 400);
+  flushNotes(); weatherTick();
 }
 let ticker = null;
 function startTicker() {
@@ -1559,7 +1686,23 @@ async function togglePlay() {
 // weather: clear, rain, snow or fog, one at a time. The view outside follows, and the rain sound plays only in rain.
 const WEATHER = ['clear', 'rain', 'storm', 'snow', 'fog'];
 const weatherNow = () => ST.rain ? 'rain' : ST.storm ? 'storm' : ST.snow ? 'snow' : ST.fog ? 'fog' : 'clear';
-function setWeather(w) {
+/* Passing rain: at the start of a track with the weather clear there is a 5% chance of a shower somewhere
+   in it, lasting 20-100% of a track (half on average). It stops on its own; weather picked by hand never
+   does. Times are on the audio clock, so a paused track pauses the weather too. */
+var autoRain = null, rainPlan = null;
+function planRain(t0, len) {
+  if (weatherNow() !== 'clear' || rainPlan || Math.random() >= 0.05) return;
+  const start = t0 + Math.random() * len;
+  rainPlan = { start, end: start + len * (0.2 + 0.8 * Math.pow(Math.random(), 5 / 3)) };
+}
+function weatherTick() {
+  const now = AC.currentTime;
+  if (rainPlan && now >= rainPlan.start) { const end = rainPlan.end; rainPlan = null; if (weatherNow() === 'clear') { autoRain = { end }; setWeather('rain', true); } }
+  if (autoRain && now >= autoRain.end) setWeather('clear', true);
+}
+function setWeather(w, auto = false) {
+  // a pick by hand (button, key, window click or settings) takes the weather back into the listener's hands
+  if (!auto) { autoRain = null; rainPlan = null; } else if (w !== 'rain') autoRain = null;
   ST.rain = w === 'rain'; ST.storm = w === 'storm'; ST.snow = w === 'snow'; ST.fog = w === 'fog'; save(); spawnRain(); spawnSnow(); setSky(viewFor());
   if (ST.storm) nextStrike = 1.5 + Math.random() * 3;
   if (AC) rainG.gain.setTargetAtTime(ST.rain ? 0.5 : ST.storm ? 0.75 : 0, AC.currentTime, 0.8);
